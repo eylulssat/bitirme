@@ -7,9 +7,9 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Kırık beyaz zemin
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text("Bebook Keşfet", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Bebook Keşfet", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -18,38 +18,38 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Arama Çubuğu (Statik Görünüm)
+          // Arama Çubuğu
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               decoration: InputDecoration(
-                hintText: "Ders kitabı veya roman ara...",
-                prefixIcon: const Icon(Icons.search),
+                hintText: "Kitap, yazar veya bölüm ara...",
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
                 filled: true,
                 fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  borderSide: BorderSide.none,
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
               ),
             ),
           ),
-          // İlan Izgarası (Grid)
+
+          // Kitap Listesi (Grid)
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, // Yan yana 2 kart
-                childAspectRatio: 0.65, // Kartların boy/en oranı
+                crossAxisCount: 2, // Yan yana 2 kitap
                 crossAxisSpacing: 15,
                 mainAxisSpacing: 15,
+                childAspectRatio: 0.75,
               ),
-              itemCount: 6, // Şimdilik 6 tane örnek gösterelim
+              itemCount: 4, // Şimdilik 4 tane örnek veri
               itemBuilder: (context, index) {
                 return const BookCard(
-                  title: "Algoritmaya Giriş (CLRS)",
-                  price: "450",
-                  imageUrl: "https://m.media-amazon.com/images/I/41T-iYtu95L._AC_UF1000,1000_QL80_.jpg",
+                  title: "Algoritma Analizi",
+                  author: "Thomas H. Cormen",
+                  price: "250",
+                  imageUrl: "https://m.media-amazon.com/images/I/41T5H8u7fUL._AC_UF1000,1000_QL80_.jpg",
+                  university: "BEÜ", // Zonguldak Bülent Ecevit Üniversitesi için
                 );
               },
             ),
