@@ -1,20 +1,30 @@
 import 'package:flutter/material.dart';
-import '../../main.dart'; // ✅ makePayment için eklendi
+import '../../main.dart' hide ApiService;
+import '../../services/api_service.dart';
+import '../features/edit_book_screen.dart';
 
 // Define the Book class
 class Book {
+  final int bookId;
+  final int userId;
   final String title;
-  final String author;
   final String price;
-  final String imageUrl;
-  final String university;
+  final String description;
+
+  // opsiyonel alanlar
+  final String? author;
+  final String? imageUrl;
+  final String? university;
 
   Book({
+    required this.bookId,
+    required this.userId,
     required this.title,
-    required this.author,
+    this.author,
     required this.price,
-    required this.imageUrl,
-    required this.university,
+    this.imageUrl,
+    this.university,
+    required this.description,
   });
 }
 
@@ -22,19 +32,13 @@ class Book {
 List<Book> favoriteBooks = [];
 
 class BookCard extends StatefulWidget {
-  final String title;
-  final String author;
-  final String price;
-  final String imageUrl;
-  final String university;
+  final Book book;
+  final VoidCallback? onUpdated;
 
   const BookCard({
     super.key,
-    required this.title,
-    required this.author,
-    required this.price,
-    required this.imageUrl,
-    required this.university,
+    required this.book,
+    this.onUpdated,
   });
 
   @override
@@ -67,14 +71,17 @@ class _BookCardState extends State<BookCard> {
             children: [
               // 📘 Kitap Resmi
               Expanded(
-                child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(20)),
-                  child: Image.network(
-                    widget.imageUrl,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                child: Image.network(
+                  widget.book.imageUrl?.isNotEmpty == true
+                      ? widget.book.imageUrl!
+                      : "https://via.placeholder.com/150",
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Icon(Icons.image, size: 40, color: Colors.grey),
+                    );
+                  },
                 ),
               ),
 
@@ -85,25 +92,22 @@ class _BookCardState extends State<BookCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.title,
+                      widget.book.title,
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      widget.author,
-                      style:
-                          const TextStyle(color: Colors.grey, fontSize: 12),
+                      widget.book.author ?? "Bilinmeyen yazar",
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
-
                     const SizedBox(height: 8),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "${widget.price} TL",
+                          "${widget.book.price} TL",
                           style: const TextStyle(
                               color: primaryColor,
                               fontWeight: FontWeight.bold,
@@ -117,7 +121,7 @@ class _BookCardState extends State<BookCard> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            widget.university,
+                            widget.book.university ?? "-",
                             style: const TextStyle(
                                 color: primaryColor,
                                 fontSize: 10,
@@ -126,26 +130,23 @@ class _BookCardState extends State<BookCard> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 8),
-
-                    // ✅ SATIN AL BUTONU EKLENDİ
                     ElevatedButton(
                       onPressed: () {
                         makePayment(
-                          context,
-                          2, // ⚠️ Şimdilik sabit user_id
-                          10, // ⚠️ Şimdilik sabit book_id
-                          double.parse(widget.price),
-                        );
+                            context,
+                            widget.book.userId,
+                            widget.book.bookId,
+                            double.tryParse(widget.book.price) ?? 0);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
-                        minimumSize:
-                            const Size(double.infinity, 35),
+                        minimumSize: const Size(double.infinity, 35),
                       ),
                       child: const Text("Satın Al"),
                     ),
+                    const SizedBox(height: 6),
+                    
                   ],
                 ),
               ),
@@ -162,19 +163,14 @@ class _BookCardState extends State<BookCard> {
                   _isFavorite = !_isFavorite;
                 });
 
-                final currentBook = Book(
-                  title: widget.title,
-                  author: widget.author,
-                  price: widget.price,
-                  imageUrl: widget.imageUrl,
-                  university: widget.university,
-                );
+                final currentBook = widget.book;
 
                 if (_isFavorite) {
                   favoriteBooks.add(currentBook);
                 } else {
                   favoriteBooks.removeWhere(
-                      (item) => item.title == widget.title);
+                    (item) => item.bookId == widget.book.bookId,
+                  );
                 }
               },
               child: Container(
@@ -182,16 +178,11 @@ class _BookCardState extends State<BookCard> {
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 4)
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
                 ),
                 child: Icon(
-                  _isFavorite
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  color:
-                      _isFavorite ? Colors.red : Colors.grey,
+                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: _isFavorite ? Colors.red : Colors.grey,
                   size: 20,
                 ),
               ),

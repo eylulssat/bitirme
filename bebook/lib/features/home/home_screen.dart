@@ -9,11 +9,15 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text("Bebook Keşfet", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text("Bebook Keşfet",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none_rounded, color: Colors.black)),
+          IconButton(
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none_rounded,
+                  color: Colors.black)),
         ],
       ),
       body: Column(
@@ -27,7 +31,9 @@ class HomeScreen extends StatelessWidget {
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
                 filled: true,
                 fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none),
               ),
             ),
           ),
@@ -42,14 +48,19 @@ class HomeScreen extends StatelessWidget {
                 mainAxisSpacing: 15,
                 childAspectRatio: 0.75,
               ),
-              itemCount: 4, // Şimdilik 4 tane örnek veri
               itemBuilder: (context, index) {
-                return const BookCard(
-                  title: "Algoritma Analizi",
-                  author: "Thomas H. Cormen",
-                  price: "250",
-                  imageUrl: "https://m.media-amazon.com/images/I/41T5H8u7fUL._AC_UF1000,1000_QL80_.jpg",
-                  university: "BEÜ", // Zonguldak Bülent Ecevit Üniversitesi için
+                return BookCard(
+                  book: Book(
+                    bookId: index,
+                    userId: 2,
+                    title: "Algoritma Analizi",
+                    author: "Thomas H. Cormen",
+                    price: "250",
+                    imageUrl:
+                        "https://m.media-amazon.com/images/I/41T5H8u7fUL._AC_UF1000,1000_QL80_.jpg",
+                    university: "BEÜ",
+                    description: "Algoritma kitabı",
+                  ),
                 );
               },
             ),

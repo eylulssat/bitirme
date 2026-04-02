@@ -1,34 +1,41 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import psycopg2
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
-import requests
 import uuid
 import iyzipay
+import json
 
 app = FastAPI()
 
-# --- CORS AYARI ---
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Web’den erişim için
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- VERİTABANI BAĞLANTISI ---
+# --- DATABASE ---
 def get_db_connection():
     return psycopg2.connect(
-        host="localhost",     # Backend’in çalıştığı PC IP’si LAN’da ise onu kullan
+        host="localhost",
         database="bebook",
         user="postgres",
-        password="12345",  
+        password="12345",
         port="5432"
     )
 
-# --- MODELLER ---
+# --- IYZICO OPTIONS ---
+IYZICO_OPTIONS = {
+    'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
+    'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
+    'base_url': 'sandbox-api.iyzipay.com'
+}
+
+# --- MODELS ---
 class UserSignup(BaseModel):
     email: str
     password: str
@@ -42,117 +49,97 @@ class UserLogin(BaseModel):
 class CreatePayment(BaseModel):
     user_id: int
     book_id: int
-    price: float    
+    price: float
 
-# --- KAYIT OLMA ---
+class UpdateBook(BaseModel):
+    book_id: int
+    user_id: int
+    title: str
+    price: float
+    description: str    
+
+# --- SIGNUP ---
 @app.post("/signup")
 async def signup(user: UserSignup):
-    conn = None
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Şifre hashleme
-        password_bytes = user.password.encode('utf-8')[:72]
-        salt = bcrypt.gensalt()
-        hashed_password = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
-        
+        hashed_password = bcrypt.hashpw(
+            user.password.encode('utf-8')[:72],
+            bcrypt.gensalt()
+        ).decode('utf-8')
+
         cur.execute(
             "INSERT INTO users (email, password_hash, university, department) VALUES (%s, %s, %s, %s)",
             (user.email, hashed_password, user.university, user.department)
         )
         conn.commit()
         cur.close()
-        return {"status": "success", "message": "Kullanıcı başarıyla kaydedildi!"}
-    
+        return {"status": "success"}
     except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"[SIGNUP ERROR] {e}")
-        raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı veya veri tabanı hatası.")
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
-# --- GİRİŞ YAPMA ---
+# --- LOGIN ---
 @app.post("/login")
 async def login(user: UserLogin):
-    conn = None
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
-        
         cur.execute("SELECT user_id, password_hash, university, department FROM users WHERE email = %s", (user.email,))
         result = cur.fetchone()
-        
-        if result is None:
-            print("[LOGIN LOG] Kullanıcı bulunamadı")
-            raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
-            
+
+        if not result:
+            raise HTTPException(status_code=401, detail="Hatalı giriş")
+
         user_id, stored_hash, university, department = result
-        
-        user_password_bytes = user.password.encode('utf-8')[:72]
-        if bcrypt.checkpw(user_password_bytes, stored_hash.encode('utf-8')):
-            return {
-                "status": "success",
-                "user_id": user_id,
-                "user_email": user.email,
-                "university": university,
-                "department": department
-            }
-        else:
-            raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
-            
-    except Exception as e:
-        print(f"[LOGIN ERROR] {e}")
-        raise HTTPException(status_code=500, detail="Sunucu hatası.")
+
+        if not bcrypt.checkpw(user.password.encode('utf-8')[:72], stored_hash.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Hatalı giriş")
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "university": university,
+            "department": department
+        }
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
-# --- ÖDEME BAŞLATMA ---
-# Dosyanın en üstüne ekle
-import iyzipay
-
-# ÖDEME BAŞLATMA kısmını bununla değiştir
+# --- CREATE PAYMENT ---
 @app.post("/create-payment")
 async def create_payment(payment: CreatePayment):
-    conn = None
+
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
 
+        # Order oluştur
         cur.execute(
-            "INSERT INTO orders (user_id, book_id, price) VALUES (%s, %s, %s) RETURNING order_id",
-            (payment.user_id, payment.book_id, payment.price)
+            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
+            (payment.user_id, payment.book_id, payment.price, "PENDING")
         )
         order_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
 
-        # iyzico ayarları
-        options = {
-            'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
-            'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
-            'base_url': 'sandbox-api.iyzipay.com'
-        }
-
-        request = {
+        request_data = {
             'locale': 'tr',
-            'conversationId': str(uuid.uuid4()),
+            'conversationId': str(order_id),  # ÖNEMLİ
             'price': str(payment.price),
             'paidPrice': str(payment.price),
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': 'http://192.168.67.99:8000/payment-callback',
-
+            'callbackUrl': 'http://192.168.67.86:8000/payment-callback',
             'buyer': {
                 'id': str(payment.user_id),
                 'name': 'Merve',
                 'surname': 'Bebook',
                 'gsmNumber': '+905350000000',
-                'email': 'email@email.com',
+                'email': 'test@email.com',
                 'identityNumber': '11111111110',
                 'lastLoginDate': '2023-10-05 12:43:35',
                 'registrationDate': '2023-10-05 12:43:35',
@@ -162,7 +149,6 @@ async def create_payment(payment: CreatePayment):
                 'country': 'Turkey',
                 'zipCode': '34732'
             },
-
             'shippingAddress': {
                 'contactName': 'Merve Bebook',
                 'city': 'Istanbul',
@@ -170,7 +156,6 @@ async def create_payment(payment: CreatePayment):
                 'address': 'Adres',
                 'zipCode': '34732'
             },
-
             'billingAddress': {
                 'contactName': 'Merve Bebook',
                 'city': 'Istanbul',
@@ -178,7 +163,6 @@ async def create_payment(payment: CreatePayment):
                 'address': 'Adres',
                 'zipCode': '34732'
             },
-
             'basketItems': [
                 {
                     'id': str(payment.book_id),
@@ -190,18 +174,165 @@ async def create_payment(payment: CreatePayment):
             ]
         }
 
-        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request, options)
+        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, IYZICO_OPTIONS)
+        response = checkout_form_initialize.read().decode('utf-8')
 
-        response_data = checkout_form_initialize.read().decode('utf-8')
-        print(f"[IYZICO RESPONSE] {response_data}")
+        print("IYZICO INIT RESPONSE:", response)
 
-        import json
-        return json.loads(response_data)
+        return json.loads(response)
 
-    except Exception as e:
-        print(f"[PAYMENT ERROR] {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if conn:
-            conn.close()
-        print("[PAYMENT LOG] DB bağlantısı kapatıldı.")
+        conn.close()
+
+# --- PAYMENT CALLBACK ---
+@app.post("/payment-callback")
+async def payment_callback(request: Request):
+
+    form_data = await request.form()
+    token = form_data.get("token")
+
+    print("🔥 CALLBACK TOKEN:", token)
+
+    retrieve_request = {
+        'locale': 'tr',
+        'conversationId': '0',  # Önemli değil burada
+        'token': token
+    }
+
+    checkout_form = iyzipay.CheckoutForm().retrieve(retrieve_request, IYZICO_OPTIONS)
+    result = json.loads(checkout_form.read().decode('utf-8'))
+
+    print("🔥 IYZICO SONUÇ:", result)
+
+    order_id = result.get("conversationId")
+    payment_status = result.get("paymentStatus")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        if payment_status == "SUCCESS":
+            cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
+                        ("SUCCESS", order_id))
+        else:
+            cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
+                        ("FAILED", order_id))
+
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+    return {"status": payment_status}
+
+@app.get("/order-status/{order_id}")
+async def order_status(order_id: int):
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT status FROM orders WHERE order_id = %s", (order_id,))
+        result = cur.fetchone()
+        cur.close()
+
+        if not result:
+            return {"status": "NOT_FOUND"}
+
+        return {"status": result[0]}
+
+    finally:
+        conn.close()
+
+@app.put("/update-book")
+async def update_book(book: UpdateBook):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Güvenlik: sadece kendi ilanını güncelleyebilsin
+        cur.execute(
+            "SELECT user_id FROM books WHERE book_id = %s",
+            (book.book_id,)
+        )
+        result = cur.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="İlan bulunamadı")
+
+        if result[0] != book.user_id:
+            raise HTTPException(status_code=403, detail="Yetkisiz işlem")
+
+        # Güncelle
+        cur.execute("""
+            UPDATE books
+            SET title = %s, price = %s, description = %s
+            WHERE book_id = %s
+        """, (book.title, book.price, book.description, book.book_id))
+        print("GELEN BOOK ID:", book.book_id)
+        print("GELEN USER ID:", book.user_id)
+        print("GÜNCELLENEN SATIR:", cur.rowcount)
+        
+
+        conn.commit()
+        cur.close()
+
+        return {"status": "success", "message": "İlan güncellendi"}
+
+    finally:
+        conn.close()        
+
+@app.delete("/delete-book/{book_id}/{user_id}")
+async def delete_book(book_id: int, user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Yetki kontrolü
+        cur.execute(
+            "SELECT user_id FROM books WHERE book_id = %s",
+            (book_id,)
+        )
+        result = cur.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="İlan bulunamadı")
+
+        if result[0] != user_id:
+            raise HTTPException(status_code=403, detail="Yetkisiz işlem")
+
+        cur.execute("DELETE FROM books WHERE book_id = %s", (book_id,))
+        conn.commit()
+        cur.close()
+
+        return {"status": "success", "message": "İlan silindi"}
+
+    finally:
+        conn.close()    
+@app.get("/my-books/{user_id}")
+async def get_my_books(user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT book_id, user_id, title, price, description
+            FROM books
+            WHERE user_id = %s
+        """, (user_id,))
+
+        books = cur.fetchall()
+
+        result = []
+        for b in books:
+            result.append({
+                "book_id": b[0],
+                "user_id": b[1],
+                "title": b[2],
+                "price": b[3],
+                "description": b[4],
+            })
+
+        return result
+
+    finally:
+        conn.close()            
