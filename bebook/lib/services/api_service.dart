@@ -2,7 +2,57 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
+  static const String baseUrl = "http://192.168.67.158:8000";
+  // Giriş Yap (LOGIN)
+  static Future<Map<String, dynamic>?> login(String email, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/login"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "password": password,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print("Giriş Hatası: ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      print("Bağlantı Hatası: $e");
+      return null;
+    }
+  }
+
+  // Kayıt Ol (SIGNUP)
+  static Future<bool> signup({
+    required String email,
+    required String password,
+    required String university,
+    required String department,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/signup"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "password": password,
+          "university": university,
+          "department": department,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Kayıt Hatası: $e");
+      return false;
+    }
+  }
   // Bilgisayarının yerel IP adresi (Örn: 192.168.1.x)
+
   static const String baseUrl = "http://192.168.67.86:8000";
   static const String baseUrl = "http://192.168.67.122:8000";
 
