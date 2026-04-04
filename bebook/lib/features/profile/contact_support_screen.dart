@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:bebook/services/api_service.dart';
 
 class ContactSupportScreen extends StatefulWidget {
   const ContactSupportScreen({super.key});
@@ -10,6 +11,17 @@ class ContactSupportScreen extends StatefulWidget {
 class _ContactSupportScreenState extends State<ContactSupportScreen> {
  
   final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,11 +62,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                       ),
                       const SizedBox(height: 30),
                       
-                      _buildField("Adınız Soyadınız"),
-                      const SizedBox(height: 15),
-                      _buildField("E-posta Adresiniz", isEmail: true),
-                      const SizedBox(height: 15),
-                      _buildField("Mesajınız", isLong: true),
+                     _buildField("Adınız Soyadınız", _nameController),
+const SizedBox(height: 15),
+_buildField("E-posta Adresiniz", _emailController, isEmail: true),
+const SizedBox(height: 15),
+_buildField("Mesajınız", _messageController, isLong: true),
                       
                       const SizedBox(height: 30),
                       
@@ -62,25 +74,34 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Mesajınız başarıyla iletildi!"),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              Navigator.pop(context);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Lütfen tüm alanları doldurun!"),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
+                          onPressed: () async {
+    if (_formKey.currentState!.validate()) {
+      // 1. Kullanıcıya işlem yapıldığını göstermek için basit bir loading gösterilebilir
+      // 2. ApiService'i çağırıyoruz
+      bool basariliMi = await ApiService.sendContactMessage(
+        _nameController.text,
+        _emailController.text,
+        _messageController.text,
+      );
+
+      if (basariliMi) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Mesajınız başarıyla iletildi!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context); // Veri gittikten sonra sayfayı kapat
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Mesaj gönderilemedi. Lütfen bağlantınızı kontrol edin!"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: brandColor,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -102,8 +123,9 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
     );
   }
 
-  Widget _buildField(String hint, {bool isEmail = false, bool isLong = false}) {
-    return TextFormField( 
+ Widget _buildField(String hint, TextEditingController controller, {bool isEmail = false, bool isLong = false}) {
+  return TextFormField(
+      controller: controller,
       maxLines: isLong ? 4 : 1,
       keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
       validator: (value) {

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
+import 'package:bebook/services/api_service.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -19,6 +20,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _mailController = TextEditingController();
+  bool isUserLoggedIn = true;
 
   // --- FOTOĞRAF SEÇME VE SEÇENEKLERİ GÖSTERME ---
   void _showPickOptions() {
@@ -187,31 +189,85 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: () {
-          if (_selectedImages.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen en az 1 fotoğraf ekleyin!")));
-          } else {
-            print("İlan yayınlanıyor...");
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6C63FF),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+ Widget _buildSubmitButton() {
+  return SizedBox(
+    width: double.infinity,
+    height: 55,
+    child: ElevatedButton(
+      onPressed: () async {
+        // 1. Giriş kontrolü (Şimdilik test için true yapabilirsin)
+        if (!isUserLoggedIn) {
+          showLoginAlert(context);
+          return;
+        }
+
+        // 2. Form Kontrolü (Boş alan var mı?)
+        if (_nameController.text.isEmpty || 
+            _authorController.text.isEmpty || 
+            _priceController.text.isEmpty ||
+            _mailController.text.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Lütfen yıldızlı (*) alanları doldurun!")),
+          );
+          return;
+        }
+
+        // 3. Fiyatı sayıya çevir
+        double? priceValue = double.tryParse(_priceController.text);
+        if (priceValue == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Geçerli bir fiyat giriniz!")),
+          );
+          return;
+        }
+
+        // 4. API'ye Gönder
+        // Not: Fotoğraf yükleme şimdilik sadece dosya yolu olarak metin bazlı gidecek
+        bool success = await ApiService.uploadBook(
+          title: _nameController.text,
+          author: _authorController.text,
+          category: _typeController.text,
+          price: priceValue,
+          description: _descController.text,
+          sellerEmail: _mailController.text,
+          imagePath: _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
+        );
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("İlan başarıyla yayınlandı!"), backgroundColor: Colors.green),
+          );
+          // Formu temizle
+          _nameController.clear();
+          _authorController.clear();
+          _priceController.clear();
+          setState(() => _selectedImages.clear());
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Hata: İlan yayınlanamadı."), backgroundColor: Colors.red),
+          );
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF6C63FF),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
-    );
-  }
+      child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    ),
+  );
+}
+  
 
   Widget _buildAIButton() {
     return InkWell(
-      onTap: () => print("Barkod tarama başlatıldı"),
+      onTap: () {
+      if (!isUserLoggedIn) {
+        showLoginAlert(context);
+      } else {
+        print("Barkod tarama başlatıldı");
+      }
+    },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -269,4 +325,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
       ],
     );
   }
+void showLoginAlert(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text("Giriş Yapmanız Gerekiyor"),
+        content: const Text("İlan yayınlamak için lütfen giriş yapınız."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Kapat"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Navigate to login screen
+            },
+            child: const Text("Giriş Yap"),
+          ),
+        ],
+      );
+    },
+  );
+}
 }

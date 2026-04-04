@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, EmailStr
 import psycopg2
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +28,7 @@ def get_db_connection():
         user="postgres",
         password="12345",
         port="5432"
-    )
+    ) # Parantez burada kapalı olmalı
 
 # --- IYZICO OPTIONS ---
 IYZICO_OPTIONS = {
@@ -59,6 +61,12 @@ class UpdateBook(BaseModel):
     description: str    
 
 # --- SIGNUP ---
+class ContactRequest(BaseModel):
+    full_name: str
+    email: str
+    message: str
+
+# --- KAYIT OLMA (SIGNUP) ---
 @app.post("/signup")
 async def signup(user: UserSignup):
     conn = get_db_connection()
@@ -214,6 +222,22 @@ async def payment_callback(request: Request):
         if payment_status == "SUCCESS":
             cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
                         ("SUCCESS", order_id))
+        
+        if result is None:
+            raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
+            
+        stored_hash = result[0]
+        university = result[1]
+        department = result[2]
+        
+        user_password_bytes = user.password.encode('utf-8')[:72]
+        if bcrypt.checkpw(user_password_bytes, stored_hash.encode('utf-8')):
+            return {
+                "status": "success",
+                "user_email": user.email,
+                "university": university,
+                "department": department
+            }
         else:
             cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
                         ("FAILED", order_id))
@@ -336,3 +360,72 @@ async def get_my_books(user_id: int):
 
     finally:
         conn.close()            
+        if conn:
+            conn.close()
+
+# --- İLETİŞİM MESAJI (CONTACT) ---
+@app.post("/contact")
+async def send_contact_message(request: ContactRequest):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # public. şemasıyla tam yol gösteriyoruz
+        cur.execute(
+            "INSERT INTO public.contact_messages (full_name, email, message) VALUES (%s, %s, %s)",
+            (request.full_name, request.email, request.message)
+        )
+        
+        conn.commit()
+        cur.close()
+        return {"status": "success", "message": "Mesajınız başarıyla iletildi!"}
+    
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"İletişim Hatası: {e}")
+        raise HTTPException(status_code=500, detail="Mesaj gönderilirken bir hata oluştu.")
+    finally:
+        if conn:
+            conn.close()
+
+            # --- KİTAP EKLEME MODELİ ---
+class BookCreate(BaseModel):
+    title: str
+    author: str
+    category: str
+    price: float
+    description: str
+    seller_email: str
+    image_path: str = None # Fotoğraf yolu şimdilik boş olabilir
+
+# --- KİTAP YÜKLEME ENDPOINT'İ (ADD BOOK) ---
+@app.post("/books")
+async def add_book(book: BookCreate):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Hazırladığımız public.books tablosuna verileri gönderiyoruz
+        cur.execute(
+            """INSERT INTO public.books 
+            (title, author, category, price, description, seller_email, image_path) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (book.title, book.author, book.category, book.price, 
+             book.description, book.seller_email, book.image_path)
+        )
+        
+        conn.commit()
+        cur.close()
+        return {"status": "success", "message": "Kitap ilanı başarıyla oluşturuldu!"}
+    
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Kitap Ekleme Hatası: {e}")
+        raise HTTPException(status_code=500, detail="Kitap eklenirken bir hata oluştu.")
+    finally:
+        if conn:
+            conn.close()
