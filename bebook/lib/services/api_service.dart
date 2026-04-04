@@ -2,9 +2,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
-  // Bilgisayarının yerel IP adresi (Örn: 192.168.1.x)
-  static const String baseUrl = "http://192.168.67.86:8000";
-  static const String baseUrl = "http://192.168.67.122:8000";
+  // Buradaki iki nokta (:) işaretinden emin ol
+  static const String baseUrl = "http://192.168.1.29:8000";
 
   // Kitapları Getir (Ana Sayfa İçin)
   static Future<List<dynamic>> fetchBooks() async {

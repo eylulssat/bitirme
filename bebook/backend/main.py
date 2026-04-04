@@ -141,7 +141,7 @@ async def create_payment(payment: CreatePayment):
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': 'http://192.168.67.86:8000/payment-callback',
+            'callbackUrl': 'http://192.168.1.29:8000/payment-callback',
             'buyer': {
                 'id': str(payment.user_id),
                 'name': 'Merve',
