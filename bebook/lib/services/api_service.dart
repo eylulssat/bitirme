@@ -51,10 +51,7 @@ class ApiService {
       return false;
     }
   }
-  // Bilgisayarının yerel IP adresi (Örn: 192.168.1.x)
 
-  static const String baseUrl = "http://192.168.67.86:8000";
-  static const String baseUrl = "http://192.168.67.122:8000";
 
   // Kitapları Getir (Ana Sayfa İçin)
   static Future<List<dynamic>> fetchBooks() async {
@@ -63,6 +60,30 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception("Kitaplar yüklenemedi");
+    }
+  }
+  // Ödeme Başlat (Iyzico Formu İçin)
+  static Future<Map<String, dynamic>?> createPayment(int userId, int bookId, double price) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/create-payment"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "user_id": userId,
+          "book_id": bookId,
+          "price": price,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print("Ödeme Hatası: ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      print("Ödeme Bağlantı Hatası: $e");
+      return null;
     }
   }
 
@@ -111,60 +132,59 @@ class ApiService {
       throw Exception("İlanlar alınamadı");
     }
   }
-}
-// İletişim Formu Mesajını Gönder
-static Future<bool> sendContactMessage(String fullName, String email, String message) async {
-  try {
-    final response = await http.post(
-      Uri.parse("$baseUrl/contact"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "full_name": fullName,
-        "email": email,
-        "message": message,
-      }),
-    );
-    // Backend 200 dönerse başarılı sayıyoruz
-    if (response.statusCode == 200) {
-      return true;
-    } else {
-      print("Backend Hatası: ${response.body}");
+
+  // İletişim Formu Mesajını Gönder
+  static Future<bool> sendContactMessage(String fullName, String email, String message) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/contact"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "full_name": fullName,
+          "email": email,
+          "message": message,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print("Backend Hatası: ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print("Bağlantı Hatası: $e");
       return false;
     }
-  } catch (e) {
-    print("Bağlantı Hatası: $e");
-    return false;
   }
-}
 
-// Yeni Kitap İlanı Yayınla
-static Future<bool> uploadBook({
-  required String title,
-  required String author,
-  required String category,
-  required double price,
-  required String description,
-  required String sellerEmail,
-  String imagePath = "",
-}) async {
-  try {
-    final response = await http.post(
-      Uri.parse("$baseUrl/books"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "title": title,
-        "author": author,
-        "category": category,
-        "price": price,
-        "description": description,
-        "seller_email": sellerEmail,
-        "image_path": imagePath,
-      }),
-    );
-    return response.statusCode == 200;
-  } catch (e) {
-    print("Yükleme Hatası: $e");
-    return false;
+  // Yeni Kitap İlanı Yayınla
+  static Future<bool> uploadBook({
+    required String title,
+    required String author,
+    required String category,
+    required double price,
+    required String description,
+    required String sellerEmail,
+    String imagePath = "",
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/books"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "title": title,
+          "author": author,
+          "category": category,
+          "price": price,
+          "description": description,
+          "seller_email": sellerEmail,
+          "image_path": imagePath,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Yükleme Hatası: $e");
+      return false;
+    }
   }
-}
 }
