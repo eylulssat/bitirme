@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
-    const String apiUrl = "http://localhost:8000/login"; // Web için localhost
+    const String apiUrl = "http://192.168.67.122:8000/login"; // Web için localhost
 
     try {
       final response = await http.post(
