@@ -5,6 +5,7 @@ import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
 import iyzipay
 import json
+from typing import Optional
 
 app = FastAPI()
 
@@ -44,6 +45,16 @@ class UserSignup(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class BookCreate(BaseModel):  # YENİ EKLENDİ/GÜNCELLENDİ
+    title: str
+    author: str
+    category: str
+    price: float
+    description: str
+    seller_email: str
+    publisher: Optional[str] = "" # Yayınevi alanı
+    image_path: Optional[str] = ""
 
 class CreatePayment(BaseModel):
     user_id: int
@@ -87,7 +98,7 @@ async def login(user: UserLogin):
     try:
         cur = conn.cursor()
         cur.execute("SELECT user_id, password_hash, university, department FROM public.users WHERE email = %s", (user.email,))
-        result = cur.fetchone()
+        result = result = cur.fetchone()
 
         if not result:
             raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
@@ -103,6 +114,54 @@ async def login(user: UserLogin):
             }
         else:
             raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
+    finally:
+        conn.close()
+
+# --- YENİ KİTAP İLANI YAYINLA ---
+@app.post("/books")
+async def upload_book(book: BookCreate):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # SQL sorgusuna 'publisher' alanı eklendi
+        query = """
+            INSERT INTO public.books 
+            (title, author, category, publisher, price, description, seller_email, image_path) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cur.execute(query, (
+            book.title, 
+            book.author, 
+            book.category, 
+            book.publisher, 
+            book.price, 
+            book.description, 
+            book.seller_email, 
+            book.image_path
+        ))
+        conn.commit()
+        return {"status": "success", "message": "İlan başarıyla oluşturuldu!"}
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+# --- TÜM KİTAPLARI GETİR (Ana Sayfa) ---
+@app.get("/books")
+async def fetch_books():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # Publisher'ı da çekiyoruz ki Flutter'da görebilelim
+        cur.execute("SELECT id, title, author, category, publisher, price, description, image_path FROM public.books WHERE is_sold = FALSE")
+        books = cur.fetchall()
+        return [
+            {
+                "id": b[0], "title": b[1], "author": b[2], "category": b[3], 
+                "publisher": b[4], "price": b[5], "description": b[6], "image_path": b[7]
+            } for b in books
+        ]
     finally:
         conn.close()
 
@@ -127,7 +186,7 @@ async def create_payment(payment: CreatePayment):
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': 'http://192.168.67.158:8000/payment-callback', # IP güncellendi
+            'callbackUrl': 'http://192.168.67.158:8000/payment-callback',
             'buyer': {
                 'id': str(payment.user_id),
                 'name': 'Eylul',
@@ -195,8 +254,14 @@ async def get_my_books(user_id: int):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT book_id, user_id, title, price, description FROM public.books WHERE user_id = %s", (user_id,))
+        # Burada da publisher alanını çekecek şekilde güncelledik
+        cur.execute("SELECT id, title, author, category, publisher, price, description FROM public.books WHERE user_id = %s", (user_id,))
         books = cur.fetchall()
-        return [{"book_id": b[0], "user_id": b[1], "title": b[2], "price": b[3], "description": b[4]} for b in books]
+        return [
+            {
+                "book_id": b[0], "title": b[1], "author": b[2], "category": b[3], 
+                "publisher": b[4], "price": b[5], "description": b[6]
+            } for b in books
+        ]
     finally:
         conn.close()

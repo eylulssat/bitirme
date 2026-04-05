@@ -17,6 +17,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _authorController = TextEditingController();
   final TextEditingController _typeController = TextEditingController();
+  final TextEditingController _publisherController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _mailController = TextEditingController();
@@ -111,6 +112,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(height: 15),
             _buildInput(label: "Tür *", icon: Icons.category_outlined, controller: _typeController),
             const SizedBox(height: 15),
+            _buildInput(label: "Yayınevi", icon: Icons.category_outlined, controller: _publisherController),
+            const SizedBox(height: 30),
             _buildInput(label: "Fiyat (TL) *", icon: Icons.sell_outlined, isNumber: true, controller: _priceController),
             const SizedBox(height: 15),
             _buildInput(label: "Açıklama (İsteğe bağlı)", icon: Icons.description_outlined, controller: _descController),
@@ -227,6 +230,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           title: _nameController.text,
           author: _authorController.text,
           category: _typeController.text,
+          publisher: _publisherController.text,
           price: priceValue,
           description: _descController.text,
           sellerEmail: _mailController.text,
@@ -240,7 +244,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
           // Formu temizle
           _nameController.clear();
           _authorController.clear();
+          _publisherController.clear();
           _priceController.clear();
+          _typeController.clear();
           setState(() => _selectedImages.clear());
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
