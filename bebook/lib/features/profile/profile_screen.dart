@@ -7,16 +7,18 @@ import 'favorites_screen.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
 
+// 🔥 DÜZENLEME: Sınıf ismi public yapıldı (MainWrapper'dan erişim için)
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+// 🔥 DÜZENLEME: State ismi public yapıldı (GlobalKey kullanımı için)
+class ProfileScreenState extends State<ProfileScreen> {
   List<Book> myBooks = [];
-  bool isLoading = false; // Başlangıçta false olmalı, sadece veri çekerken true yapıyoruz
+  bool isLoading = false; 
   bool isLoggedIn = false;
 
   String? userEmail;
@@ -27,9 +29,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Eğer bir "Session Management" (oturum yönetimi) eklersen buraya kontrol ekleyebiliriz.
+    if (isLoggedIn) {
+      fetchMyBooks();
+    }
   }
 
+  // 🔥 DÜZENLEME: Fonksiyon ismi public yapıldı (Dışarıdan tetiklemek için)
   // KULLANICININ KENDİ İLANLARINI ÇEKME
   Future<void> fetchMyBooks() async {
     if (userId == null) return;
@@ -40,16 +45,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final data = await ApiService.getMyBooks(userId!);
 
       setState(() {
-        myBooks = data.map<Book>((b) => Book(
-          bookId: b['book_id'],
-          userId: b['user_id'],
-          title: b['title'],
-          author: b['author'] ?? "Bilinmiyor",
-          price: b['price'].toString(),
-          imageUrl: b['imageUrl'] ?? "https://via.placeholder.com/150",
-          university: b['university'] ?? "Zonguldak BEÜ",
-          description: b['description'] ?? "",
-        )).toList();
+        myBooks = data
+            .map<Book>((b) => Book(
+                  bookId: b['book_id'],
+                  userId: b['user_id'],
+                  title: b['title'],
+                  author: b['author'] ?? "Bilinmiyor",
+                  price: b['price'].toString(),
+                  imageUrl: b['imageUrl'] ?? "https://via.placeholder.com/150",
+                  university: b['university'] ?? "Zonguldak BEÜ",
+                  description: b['description'] ?? "",
+                ))
+            .toList();
       });
     } catch (e) {
       debugPrint("Profil Kitapları Yükleme Hatası: $e");
@@ -62,20 +69,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
 
+    if (isLoggedIn && myBooks.isEmpty && !isLoading) {
+      fetchMyBooks();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text("Profil", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text("Profil",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AboutBebookScreen())),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const AboutBebookScreen())),
             icon: const Icon(Icons.info_outline_rounded, color: primaryColor),
           ),
           IconButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactSupportScreen())),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ContactSupportScreen())),
             icon: const Icon(Icons.support_agent_rounded, color: primaryColor),
           ),
           const SizedBox(width: 8),
@@ -94,11 +112,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.account_circle_outlined, size: 100, color: Colors.grey),
+            const Icon(Icons.account_circle_outlined,
+                size: 100, color: Colors.grey),
             const SizedBox(height: 20),
-            const Text("Bebook'a Hoş Geldin", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text("Bebook'a Hoş Geldin",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            const Text("Profilini yönetmek ve ilanlarını görmek için giriş yapmalısın.", textAlign: TextAlign.center),
+            const Text(
+                "Profilini yönetmek ve ilanlarını görmek için giriş yapmalısın.",
+                textAlign: TextAlign.center),
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
@@ -107,7 +129,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () async {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    MaterialPageRoute(
+                        builder: (context) => const LoginScreen()),
                   );
 
                   if (result != null && result is Map) {
@@ -118,14 +141,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       userDepartment = result['department'];
                       userId = result['user_id'];
                     });
-                    fetchMyBooks(); // Giriş başarılıysa kitapları hemen getir
+                    fetchMyBooks(); 
                   }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text("Giriş Yap",
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(height: 15),
@@ -133,12 +159,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: double.infinity,
               height: 50,
               child: OutlinedButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUpScreen())),
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const SignUpScreen())),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: primaryColor),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text("Üye Ol", style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                child: Text("Üye Ol",
+                    style: TextStyle(
+                        color: primaryColor, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -152,20 +184,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          // Kullanıcı Bilgi Kartı
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                ]),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 35,
                   backgroundColor: primaryColor.withOpacity(0.2),
                   child: Text(
-                    (userEmail != null && userEmail!.isNotEmpty) ? userEmail![0].toUpperCase() : "?",
-                    style: TextStyle(color: primaryColor, fontSize: 28, fontWeight: FontWeight.bold),
+                    (userEmail != null && userEmail!.isNotEmpty)
+                        ? userEmail![0].toUpperCase()
+                        : "?",
+                    style: TextStyle(
+                        color: primaryColor,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 20),
@@ -174,32 +214,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(userEmail ?? "E-posta bulunamadı",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 17)),
                       const SizedBox(height: 4),
                       Text(userUniversity ?? "Üniversite belirtilmemiş",
-                          style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 14)),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          
           const SizedBox(height: 30),
-
-          // Menü Elemanları
-          _buildTile(Icons.favorite_border, "Favorilediğim Kitaplar", primaryColor, 
-            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const FavoritesScreen()))),
-
-          _buildTile(Icons.sell_outlined, "Satışa Sunduğum Kitaplar", primaryColor, () => _showMyBooksSheet()),
-
-          _buildTile(Icons.assignment_turned_in_outlined, "Satılan Kitaplarım", primaryColor, () {
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bu özellik yakında eklenecek.")));
+          _buildTile(
+              Icons.favorite_border,
+              "Favorilediğim Kitaplar",
+              primaryColor,
+              () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const FavoritesScreen()))),
+          _buildTile(Icons.sell_outlined, "Satışa Sunduğum Kitaplar",
+              primaryColor, () => _showMyBooksSheet()),
+          _buildTile(Icons.assignment_turned_in_outlined, "Satılan Kitaplarım",
+              primaryColor, () {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Bu özellik yakında eklenecek.")));
           }),
-
           const SizedBox(height: 30),
-
-          // Çıkış Yap Butonu
           TextButton.icon(
             onPressed: () {
               setState(() {
@@ -210,15 +253,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               });
             },
             icon: const Icon(Icons.exit_to_app, color: Colors.red),
-            label: const Text("Çıkış Yap", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            label: const Text("Çıkış Yap",
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  // İlanlarımı Alt Panelde Göster
   void _showMyBooksSheet() {
+    // 🔥 ÖNEMLİ: Panel açılırken listenin güncel olduğundan emin oluyoruz
+    if (myBooks.isEmpty && !isLoading) {
+      fetchMyBooks();
+    }
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -232,27 +281,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           children: [
             const SizedBox(height: 15),
-            Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            Container(
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10))),
             const Padding(
               padding: EdgeInsets.all(20.0),
-              child: Text("İlanlarım", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              child: Text("İlanlarım",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             ),
             Expanded(
-              child: isLoading 
-                ? const Center(child: CircularProgressIndicator())
-                : myBooks.isEmpty
-                  ? const Center(child: Text("Henüz bir ilanınız bulunmuyor."))
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: myBooks.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 15,
-                        mainAxisSpacing: 15,
-                        childAspectRatio: 0.7,
-                      ),
-                      itemBuilder: (context, index) => BookCard(book: myBooks[index]),
-                    ),
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : myBooks.isEmpty
+                      ? const Center(
+                          child: Text("Henüz bir ilanınız bulunmuyor."))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: myBooks.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 15,
+                            mainAxisSpacing: 15,
+                            childAspectRatio: 0.7,
+                          ),
+                          itemBuilder: (context, index) =>
+                              BookCard(book: myBooks[index]),
+                        ),
             ),
           ],
         ),
@@ -260,14 +318,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTile(IconData icon, String title, Color color, VoidCallback onTap) {
+  Widget _buildTile(
+      IconData icon, String title, Color color, VoidCallback onTap) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: ListTile(
         leading: Icon(icon, color: color),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+        trailing:
+            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
         onTap: onTap,
       ),
     );

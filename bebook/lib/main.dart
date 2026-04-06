@@ -72,10 +72,9 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
       final String checkoutUrl = paymentResponse['paymentPageUrl'];
       final String orderId = paymentResponse['conversationId'].toString(); 
 
-      // 1. ADIM: WebView açılır ve kapanana kadar beklenir
+      // ✅ 1. ADIM: WebView açılır ve KAPANANA KADAR BEKLENİR
       if (context.mounted) {
-        // BURADA await KALDIRILDI: Böylece sorgulama hemen arkasından başlar.
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => PaymentWebView(url: checkoutUrl),
@@ -83,71 +82,52 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
         );
       }
 
-      
-
-      // WebView kapandıktan sonra buraya devam eder
       if (!context.mounted) return;
-      
-      // 2. ADIM: Sorgulama diyaloğunu göster
-      /*showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text("Ödeme doğrulanıyor, lütfen bekleyin..."),
-            ],
-          ),
-        ),
-      );*/
 
-      // --- POLLING (SORGULAMA) BAŞLANGICI ---
+      // --- POLLING BAŞLANGICI (ARTIK DOĞRU YERDE) ---
       bool isSuccess = false;
+
       for (int i = 0; i < 20; i++) {
-        await Future.delayed(const Duration(seconds: 4));
+        await Future.delayed(const Duration(seconds: 3)); // biraz hızlandırdım
+
         final statusUrl = "${api.baseUrl}/order-status/$orderId";
-        
+
         try {
           final statusResponse = await http.get(Uri.parse(statusUrl));
-          // ... döngü içindeki ilgili kısım ...
-if (statusResponse.statusCode == 200) {
-  final statusData = jsonDecode(statusResponse.body);
-  debugPrint("Backend'den Gelen Ham Veri: $statusData"); // Terminalde ne geldiğini görelim
 
-  // statusData bir Map mi yoksa direkt String mi kontrol edip esnek arama yapıyoruz
-  String currentStatus = "";
-  if (statusData is Map && statusData.containsKey('status')) {
-    currentStatus = statusData['status'].toString();
-  } else {
-    currentStatus = statusData.toString();
-  }
+          if (statusResponse.statusCode == 200) {
+            final statusData = jsonDecode(statusResponse.body);
+            debugPrint("Backend'den Gelen Ham Veri: $statusData");
 
-  // Küçük-büyük harf duyarlılığını ortadan kaldırıyoruz
-  if (currentStatus.toUpperCase() == "SUCCESS") {
-    isSuccess = true; 
-    debugPrint("Tebrikler Merve, SUCCESS yakalandı!");
-    break; 
-  } else if (currentStatus.toUpperCase() == "FAILED") {
-    isSuccess = false;
-    break;
-  }
-}
+            String currentStatus = "";
+            if (statusData is Map && statusData.containsKey('status')) {
+              currentStatus = statusData['status'].toString();
+            } else {
+              currentStatus = statusData.toString();
+            }
+
+            final statusUpper = currentStatus.toUpperCase();
+
+            if (statusUpper == "SUCCESS") {
+              isSuccess = true;
+              debugPrint("SUCCESS yakalandı!");
+              break;
+            } else if (statusUpper == "FAILED") {
+              isSuccess = false;
+              break;
+            }
+
+            // PENDING ise devam eder (ama artık doğru zamanda)
+          }
         } catch (e) {
-          debugPrint("Sorgu hatası (denemeye devam ediliyor): $e");
+          debugPrint("Sorgu hatası: $e");
         }
       }
 
-      // Bekleme diyaloğunu kapat
-      /*if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }*/
-      
+      // küçük bekleme (UI için)
       await Future.delayed(const Duration(milliseconds: 200));
 
-      // 3. ADIM: Sonuç diyaloğunu göster
+      // ✅ SONUÇ
       if (isSuccess) {
         if (context.mounted) {
           _showResultDialog(context, "Başarılı", "Ödemeniz onaylandı!", Colors.green, true);
@@ -162,7 +142,7 @@ if (statusResponse.statusCode == 200) {
     debugPrint("Hata: $e");
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Hata: $e"), 
+        content: Text("Hata: $e"),
         backgroundColor: Colors.red,
       ));
     }
