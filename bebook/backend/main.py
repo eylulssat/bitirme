@@ -1,14 +1,11 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 import psycopg2
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
-import iyzipay
 import json
+import iyzipay
 
 app = FastAPI()
 
@@ -427,6 +424,7 @@ async def send_contact_message(request: ContactRequest):
 
             # --- KİTAP EKLEME MODELİ ---
 class BookCreate(BaseModel):
+    user_id: int
     title: str
     author: str
     category: str
@@ -443,12 +441,12 @@ async def add_book(book: BookCreate):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Hazırladığımız public.books tablosuna verileri gönderiyoruz
+        # Sorguya user_id (veya senin DB'ndeki kolon adı neyse) eklendi
         cur.execute(
             """INSERT INTO public.books 
-            (title, author, category, price, description, seller_email, image_path) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (book.title, book.author, book.category, book.price, 
+            (user_id, title, author, category, price, description, seller_email, image_path) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (book.user_id, book.title, book.author, book.category, book.price, 
              book.description, book.seller_email, book.image_path)
         )
         
@@ -464,3 +462,26 @@ async def add_book(book: BookCreate):
     finally:
         if conn:
             conn.close()
+@app.get("/books")
+async def get_all_books():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT book_id, user_id, title, author, category, price, description, image_path FROM public.books")
+        books = cur.fetchall()
+        
+        result = []
+        for b in books:
+            result.append({
+                "book_id": b[0],
+                "user_id": b[1],
+                "title": b[2],
+                "author": b[3],
+                "category": b[4],
+                "price": b[5],
+                "description": b[6],
+                "image_path": b[7]
+            })
+        return result
+    finally:
+        conn.close()
