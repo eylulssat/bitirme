@@ -60,7 +60,7 @@ class ApiService {
       throw Exception("İlanlar alınamadı");
     }
   }
-}
+
 // İletişim Formu Mesajını Gönder
 static Future<bool> sendContactMessage(String fullName, String email, String message) async {
   try {

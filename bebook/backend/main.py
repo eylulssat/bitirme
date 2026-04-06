@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -193,17 +194,17 @@ async def create_payment(payment: CreatePayment):
         conn.close()
 
 # --- PAYMENT CALLBACK ---
+# --- PAYMENT CALLBACK (GÜNCELLENMİŞ VE TAM HALİ) ---
 @app.post("/payment-callback")
 async def payment_callback(request: Request):
-
     form_data = await request.form()
     token = form_data.get("token")
 
     print("🔥 CALLBACK TOKEN:", token)
 
+    # Token sorgusu yaparken conversationId göndermiyoruz ki iyzico'dakini bozmasın
     retrieve_request = {
         'locale': 'tr',
-        'conversationId': '0',  # Önemli değil burada
         'token': token
     }
 
@@ -212,42 +213,76 @@ async def payment_callback(request: Request):
 
     print("🔥 IYZICO SONUÇ:", result)
 
+    # iyzico'dan dönen asıl conversationId'yi (order_id) alıyoruz
     order_id = result.get("conversationId")
     payment_status = result.get("paymentStatus")
+
+    # KRİTİK DÜZELTME: Eğer ID 0 gelirse basketId'yi dene
+    if not order_id or order_id == "0":
+        order_id = result.get("basketId")
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-
+        print(f"DEBUG: iyzico'dan gelen durum: '{payment_status}', Gerçek ID: {order_id}") 
+        
         if payment_status == "SUCCESS":
+            # order_id'yi int yaparak veritabanına gönderiyoruz
             cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
-                        ("SUCCESS", order_id))
-        
-        if result is None:
-            raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
+                        ("SUCCESS", int(order_id)))
             
-        stored_hash = result[0]
-        university = result[1]
-        department = result[2]
-        
-        user_password_bytes = user.password.encode('utf-8')[:72]
-        if bcrypt.checkpw(user_password_bytes, stored_hash.encode('utf-8')):
-            return {
-                "status": "success",
-                "user_email": user.email,
-                "university": university,
-                "department": department
-            }
+            status_text = "Ödeme Başarılı!"
+            sub_text = "İşleminiz tamamlandı. Uygulamaya geri dönebilirsiniz."
+            main_color = "#2ecc71"  # Yeşil
+            icon = "✔️"
         else:
             cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
-                        ("FAILED", order_id))
+                        ("FAILED", int(order_id)))
+            
+            status_text = "Ödeme Başarısız!"
+            main_color = "#e74c3c" # Kırmızı
+            sub_text = "Ödeme onaylanmadı. Lütfen tekrar deneyin."
+            icon = "❌"
 
         conn.commit()
         cur.close()
+    except Exception as e:
+        print(f"Hata: {e}")
+        status_text = "Bir hata oluştu"
+        main_color = "orange"
+        sub_text = f"Hata detayı: {e}"
+        icon = "⚠️"
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
-    return {"status": payment_status}
+    # HTML ÇIKTISI (Kullanıcı butona bastığında pencereyi kapatmaya çalışacak)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{ background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }}
+                .card {{ background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 80%; max-width: 400px; }}
+                .icon {{ font-size: 60px; margin-bottom: 20px; }}
+                h2 {{ color: {main_color}; margin: 0 0 10px 0; }}
+                p {{ color: #7f8c8d; font-size: 16px; }}
+                .btn {{ margin-top: 25px; background-color: {main_color}; color: white; padding: 12px 30px; border-radius: 30px; text-decoration: none; display: inline-block; font-weight: bold; border: none; cursor: pointer; }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">{icon}</div>
+                <h2>{status_text}</h2>
+                <p>{sub_text}</p>
+                <button class="btn" onclick="window.close()">Tamam</button>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.get("/order-status/{order_id}")
 async def order_status(order_id: int):
