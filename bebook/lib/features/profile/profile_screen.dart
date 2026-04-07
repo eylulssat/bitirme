@@ -24,23 +24,18 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  // 🔥 BACKEND URL TANIMI: Görsellerin görünmesi için bu adres şarttır.
-  // Emulator için: 10.0.2.2, Gerçek cihaz için: Bilgisayarınızın IP adresi.
   final String baseUrl = "http://192.168.1.29:8000/uploads/";
 
   @override
   void initState() {
     super.initState();
-    // Eğer kullanıcı zaten giriş yapmışsa kitapları çek
     if (isLoggedIn && userId != null) {
       fetchMyBooks();
     }
   }
 
-  // KULLANICININ KENDİ İLANLARINI ÇEKME
   Future<void> fetchMyBooks() async {
     if (userId == null) return;
-
     setState(() => isLoading = true);
 
     try {
@@ -48,8 +43,6 @@ class ProfileScreenState extends State<ProfileScreen> {
 
       setState(() {
         myBooks = data.map<Book>((b) {
-          // 🔥 GÖRSEL YOLU DÜZENLEME: 
-          // Eğer veritabanından gelen path tam bir URL değilse, başına baseUrl ekliyoruz.
           String rawPath = b['image_path'] ?? b['imageUrl'] ?? "";
           String finalImageUrl = "https://via.placeholder.com/150";
 
@@ -67,7 +60,7 @@ class ProfileScreenState extends State<ProfileScreen> {
             title: b['title'] ?? "Bilinmiyor",
             author: b['author'] ?? "Bilinmiyor",
             price: b['price'].toString(),
-            imageUrl: finalImageUrl, // Düzenlenmiş tam yol
+            imageUrl: finalImageUrl,
             university: b['university'] ?? "Zonguldak BEÜ",
             description: b['description'] ?? "",
           );
@@ -84,7 +77,6 @@ class ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
 
-    // Eğer login olduysa ve liste boşsa otomatik çek (Güvenlik önlemi)
     if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
       fetchMyBooks();
     }
@@ -324,7 +316,10 @@ class ProfileScreenState extends State<ProfileScreen> {
                             childAspectRatio: 0.7,
                           ),
                           itemBuilder: (context, index) =>
-                              BookCard(book: myBooks[index]),
+                              BookCard(
+                                book: myBooks[index], 
+                                isMyPost: true, // 🔥 Kendi ilanın olduğu için buton gizlendi
+                              ),
                         ),
             ),
           ],

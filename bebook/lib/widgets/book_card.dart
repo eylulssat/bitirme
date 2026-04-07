@@ -32,11 +32,13 @@ List<Book> favoriteBooks = [];
 class BookCard extends StatefulWidget {
   final Book book;
   final VoidCallback? onUpdated;
+  final bool isMyPost; // 👈 Yeni eklenen: Kendi ilanım mı kontrolü
 
   const BookCard({
     super.key,
     required this.book,
     this.onUpdated,
+    this.isMyPost = false, // 👈 Varsayılan olarak false (Yani satın al butonu gözükür)
   });
 
   @override
@@ -87,7 +89,6 @@ class _BookCardState extends State<BookCard> {
                         : "https://via.placeholder.com/150",
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    // 🔥 Resim yüklenirken gösterilecek yükleme göstergesi
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
                       return Center(
@@ -100,7 +101,6 @@ class _BookCardState extends State<BookCard> {
                         ),
                       );
                     },
-                    // 🔥 Resim hatalıysa gösterilecek alan
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
                         color: Colors.grey[100],
@@ -176,33 +176,36 @@ class _BookCardState extends State<BookCard> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: () {
-                        makePayment(
-                            context,
-                            widget.book.userId,
-                            widget.book.bookId,
-                            double.tryParse(widget.book.price) ?? 0);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 35),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        elevation: 0,
+
+                    // 🔥 DEĞİŞİKLİK BURADA: Eğer ilan benimse butonu gösterme
+                    if (!widget.isMyPost)
+                      ElevatedButton(
+                        onPressed: () {
+                          makePayment(
+                              context,
+                              widget.book.userId,
+                              widget.book.bookId,
+                              double.tryParse(widget.book.price) ?? 0);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 35),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        child: const Text("Satın Al",
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                      child: const Text("Satın Al",
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
                   ],
                 ),
               ),
             ],
           ),
 
-          // ❤️ FAVORİ BUTONU
+          // ❤️ FAVORİ BUTONU (İstersen bunu da if(!widget.isMyPost) içine alabilirsin)
           Positioned(
             top: 10,
             right: 10,
