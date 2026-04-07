@@ -240,6 +240,15 @@ async def create_payment(payment: CreatePayment):
         conn.commit()
         cur.close()
 
+        # Ortak adres objesi (Hem fatura hem teslimat için kullanabiliriz)
+        address_info = {
+            'contactName': 'Merve Bebook',
+            'city': 'Zonguldak',
+            'country': 'Turkey',
+            'address': 'Universite Caddesi No:100 Incivez',
+            'zipCode': '67100'
+        }
+
         request_data = {
             'locale': 'tr',
             'conversationId': str(order_id),
@@ -258,9 +267,20 @@ async def create_payment(payment: CreatePayment):
                 'identityNumber': '11111111110',
                 'city': 'Zonguldak',
                 'country': 'Turkey',
-                'zipCode': '67100'
+                'zipCode': '67100',
+                'registrationAddress': 'Universite Caddesi No:100 Incivez'
             },
-            'basketItems': [{'id': str(payment.book_id), 'name': 'Kitap', 'category1': 'Egitim', 'itemType': 'PHYSICAL', 'price': str(payment.price)}]
+            'shippingAddress': address_info, # 🔥 Teslimat Adresi Eklendi
+            'billingAddress': address_info,  # 🔥 Fatura Adresi Eklendi
+            'basketItems': [
+                {
+                    'id': str(payment.book_id), 
+                    'name': 'Kitap', 
+                    'category1': 'Egitim', 
+                    'itemType': 'PHYSICAL', 
+                    'price': str(payment.price)
+                }
+            ]
         }
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, IYZICO_OPTIONS)
         return json.loads(checkout_form_initialize.read().decode('utf-8'))
@@ -332,3 +352,16 @@ async def delete_book(book_id: int, user_id: int):
 async def contact(req: ContactRequest):
     # İletişim mesajlarını buraya kaydedebilir veya e-posta atabilirsin.
     return {"status": "success", "message": "Mesajınız iletildi."}
+@app.get("/order-status/{order_id}")
+async def get_order_status(order_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT status FROM orders WHERE order_id = %s", (order_id,))
+        result = cur.fetchone()
+        if result:
+            return {"status": result[0]}
+        else:
+            raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+    finally:
+        conn.close()

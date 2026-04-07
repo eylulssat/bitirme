@@ -271,6 +271,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showMyBooksSheet() {
+    // Sayfa açılırken veriler boşsa tekrar çekelim
     if (myBooks.isEmpty && !isLoading) {
       fetchMyBooks();
     }
@@ -279,50 +280,56 @@ class ProfileScreenState extends State<ProfileScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
-          color: Color(0xFFF5F5F5),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 15),
-            Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10))),
-            const Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Text("İlanlarım",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            ),
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : myBooks.isEmpty
-                      ? const Center(
-                          child: Text("Henüz bir ilanınız bulunmuyor."))
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: myBooks.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 15,
-                            mainAxisSpacing: 15,
-                            childAspectRatio: 0.7,
+      builder: (context) => StatefulBuilder( // Alt sayfa içinde state yönetimi için
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 15),
+              Container(
+                  width: 50,
+                  height: 5,
+                  decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10))),
+              const Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text("İlanlarım",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : myBooks.isEmpty
+                        ? const Center(
+                            child: Text("Henüz bir ilanınız bulunmuyor."))
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: myBooks.length,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 15,
+                              mainAxisSpacing: 15,
+                              childAspectRatio: 0.65, // Butonlar eklendiği için boyutu biraz artırdık
+                            ),
+                            itemBuilder: (context, index) => BookCard(
+                              book: myBooks[index],
+                              isMyPost: true, // 🔥 Düzenle/Sil butonlarını aktif eder
+                              onUpdated: () {
+                                // Bir ilan silindiğinde veya güncellendiğinde:
+                                fetchMyBooks(); // Ana veriyi güncelle
+                                Navigator.pop(context); // BottomSheet'i kapat (tazelenmiş veriyi görmek için tekrar açılır)
+                              },
+                            ),
                           ),
-                          itemBuilder: (context, index) =>
-                              BookCard(
-                                book: myBooks[index], 
-                                isMyPost: true, // 🔥 Kendi ilanın olduğu için buton gizlendi
-                              ),
-                        ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

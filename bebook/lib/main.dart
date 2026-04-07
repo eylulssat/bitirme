@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'features/main_wrapper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'features/payment/payment_web_view.dart';
 
 void main() {
@@ -25,9 +24,7 @@ class MyApp extends StatelessWidget {
 
 // ------------------- API SERVİSİ -------------------
 class ApiService {
-  // YANLIŞ: final String baseUrl = "http://192.168.1.29.8000"; (Nokta varsa hata verir)
-  // DOĞRU:
-  final String baseUrl = "http://192.168.1.29:8000"; 
+  static const String baseUrl = "http://192.168.1.29:8000"; 
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {
@@ -42,38 +39,38 @@ class ApiService {
           "book_id": bookId,
           "price": price,
         }),
-      ); // 10 saniye bekleme süresi
+      );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        // Sunucuya ulaştık ama sunucu hata (404, 500 vb.) döndürdü
-        throw Exception("Sunucu Hatası: ${response.statusCode} - ${response.body}");
+        throw Exception("Sunucu Hatası: ${response.statusCode}");
       }
     } catch (e) {
-      // Bağlantı hatası (IP yanlışlığı, kapalı server vb.) burada fırlatılır
       rethrow;
     }
   }
 }
 
-// ------------------- ÖDEME AKIŞI (TEK FONKSİYON) -------------------
-// ------------------- ÖDEME AKIŞI (DÜZENLENMİŞ POLLING) -------------------
-
- // ------------------- ÖDEME AKIŞI (DÜZENLENMİŞ) -------------------
+// ------------------- ÖDEME AKIŞI -------------------
 void makePayment(BuildContext context, int userId, int bookId, double price) async {
   final api = ApiService();
 
   try {
-    debugPrint("--- İstek Gönderiliyor: $userId, $bookId, $price ---");
+    debugPrint("--- Ödeme Başlatılıyor ---");
     final paymentResponse = await api.createPayment(userId, bookId, price);
     
-    if (paymentResponse.containsKey('paymentPageUrl')) {
-      final String checkoutUrl = paymentResponse['paymentPageUrl'];
-      final String orderId = paymentResponse['conversationId'].toString(); 
+    // Terminalden gelen veriyi kontrol etmek için:
+    debugPrint("Backend Yanıtı: $paymentResponse");
+    
+    // Iyzico verisi bazen doğrudan gelmez, kontrolü esnek tutuyoruz
+    String? checkoutUrl = paymentResponse['paymentPageUrl'];
+    String? orderId = paymentResponse['conversationId']?.toString();
 
-      // ✅ 1. ADIM: WebView açılır ve KAPANANA KADAR BEKLENİR
+    // Eğer URL varsa WebView'ı aç
+    if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
       if (context.mounted) {
+        debugPrint("WebView Açılıyor: $checkoutUrl");
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -82,74 +79,61 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
         );
       }
 
+      // WebView kapandıktan sonra (Geri tuşu veya ödeme bitişi)
       if (!context.mounted) return;
 
-      // --- POLLING BAŞLANGICI (ARTIK DOĞRU YERDE) ---
+      // 2. ADIM: Polling (Durum Sorgulama)
       bool isSuccess = false;
+      if (orderId != null) {
+        for (int i = 0; i < 20; i++) {
+          await Future.delayed(const Duration(seconds: 2)); 
 
-      for (int i = 0; i < 20; i++) {
-        await Future.delayed(const Duration(seconds: 3)); // biraz hızlandırdım
+          final statusUrl = "${ApiService.baseUrl}/order-status/$orderId";
+          try {
+            final statusResponse = await http.get(Uri.parse(statusUrl));
+            if (statusResponse.statusCode == 200) {
+              final statusData = jsonDecode(statusResponse.body);
+              String currentStatus = statusData['status']?.toString().toUpperCase() ?? "";
 
-        final statusUrl = "${api.baseUrl}/order-status/$orderId";
-
-        try {
-          final statusResponse = await http.get(Uri.parse(statusUrl));
-
-          if (statusResponse.statusCode == 200) {
-            final statusData = jsonDecode(statusResponse.body);
-            debugPrint("Backend'den Gelen Ham Veri: $statusData");
-
-            String currentStatus = "";
-            if (statusData is Map && statusData.containsKey('status')) {
-              currentStatus = statusData['status'].toString();
-            } else {
-              currentStatus = statusData.toString();
+              if (currentStatus == "SUCCESS") {
+                isSuccess = true;
+                break;
+              } else if (currentStatus == "FAILED") {
+                break;
+              }
             }
-
-            final statusUpper = currentStatus.toUpperCase();
-
-            if (statusUpper == "SUCCESS") {
-              isSuccess = true;
-              debugPrint("SUCCESS yakalandı!");
-              break;
-            } else if (statusUpper == "FAILED") {
-              isSuccess = false;
-              break;
-            }
-
-            // PENDING ise devam eder (ama artık doğru zamanda)
+          } catch (e) {
+            debugPrint("Sorgu hatası: $e");
           }
-        } catch (e) {
-          debugPrint("Sorgu hatası: $e");
         }
       }
 
-      // küçük bekleme (UI için)
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      // ✅ SONUÇ
-      if (isSuccess) {
-        if (context.mounted) {
+      // 3. ADIM: Sonuç Gösterimi
+      if (context.mounted) {
+        if (isSuccess) {
           _showResultDialog(context, "Başarılı", "Ödemeniz onaylandı!", Colors.green, true);
+        } else {
+          _showResultDialog(context, "Hata", "Ödeme tamamlanamadı veya iptal edildi.", Colors.red, false);
         }
-      } else {
-        if (context.mounted) {
-          _showResultDialog(context, "Hata", "Ödeme onaylanamadı.", Colors.red, false);
-        }
+      }
+    } else {
+      debugPrint("HATA: paymentPageUrl bulunamadı!");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Ödeme linki oluşturulamadı."), backgroundColor: Colors.orange)
+        );
       }
     }
   } catch (e) {
-    debugPrint("Hata: $e");
+    debugPrint("Akış Hatası: $e");
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Hata: $e"),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red)
+      );
     }
   }
 }
 
-// ------------------- SONUÇ DİYALOĞU VE ANA SAYFAYA DÖNÜŞ -------------------
 void _showResultDialog(BuildContext context, String title, String msg, Color color, bool isSuccess) {
   showDialog(
     context: context,
@@ -175,4 +159,4 @@ void _showResultDialog(BuildContext context, String title, String msg, Color col
       ],
     ),
   );
-}   
+}
