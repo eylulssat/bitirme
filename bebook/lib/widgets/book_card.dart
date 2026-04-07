@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../main.dart' hide ApiService;
 import '../../services/api_service.dart';
-import '../features/edit_book_screen.dart';
+import '../features/post_ad/edit_book_screen.dart';
 
 // Book sınıfı aynı kalıyor...
 class Book {
@@ -50,7 +50,8 @@ class _BookCardState extends State<BookCard> {
   @override
   void initState() {
     super.initState();
-    _isFavorite = favoriteBooks.any((item) => item.bookId == widget.book.bookId);
+    _isFavorite =
+        favoriteBooks.any((item) => item.bookId == widget.book.bookId);
   }
 
   // Silme işlemi için küçük bir yardımcı fonksiyon
@@ -61,14 +62,19 @@ class _BookCardState extends State<BookCard> {
         title: const Text("İlanı Sil"),
         content: const Text("Bu ilanı silmek istediğinize emin misiniz?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Vazgeç")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Sil", style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Vazgeç")),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Sil", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
 
     if (confirm == true) {
-      final res = await ApiService.deleteBook(widget.book.bookId, widget.book.userId);
+      final res =
+          await ApiService.deleteBook(widget.book.bookId, widget.book.userId);
       if (res['status'] == 'success') {
         widget.onUpdated?.call(); // Profil sayfasını yeniler
       }
@@ -84,7 +90,10 @@ class _BookCardState extends State<BookCard> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5)),
         ],
       ),
       child: Stack(
@@ -95,14 +104,18 @@ class _BookCardState extends State<BookCard> {
               // 📘 Kitap Resmi Bölümü (Aynı kalıyor)
               Expanded(
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Image.network(
-                    widget.book.imageUrl != null && widget.book.imageUrl!.isNotEmpty
+                    widget.book.imageUrl != null &&
+                            widget.book.imageUrl!.isNotEmpty
                         ? widget.book.imageUrl!
                         : "https://via.placeholder.com/150",
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)),
+                    errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image)),
                   ),
                 ),
               ),
@@ -113,14 +126,29 @@ class _BookCardState extends State<BookCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.book.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(widget.book.author ?? "Yazar Belirtilmemiş", style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1),
+                    Text(widget.book.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    Text(widget.book.author ?? "Yazar Belirtilmemiş",
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 12),
+                        maxLines: 1),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("${widget.book.price} TL", style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                        Text(widget.book.university ?? "BEÜ", style: const TextStyle(color: primaryColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                        Text("${widget.book.price} TL",
+                            style: const TextStyle(
+                                color: primaryColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14)),
+                        Text(widget.book.university ?? "BEÜ",
+                            style: const TextStyle(
+                                color: primaryColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -131,40 +159,65 @@ class _BookCardState extends State<BookCard> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
+                              // BookCard.dart içindeki ilgili kısım
                               onPressed: () async {
                                 final result = await Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (context) => EditBookScreen(book: widget.book)),
+                                  MaterialPageRoute(
+                                    builder: (context) => EditBookScreen(
+                                      // Burayı nesne olarak değil, Map (anahtar-değer) olarak gönderiyoruz:
+                                      book: {
+                                        'book_id': widget.book.bookId,
+                                        'user_id': widget.book.userId,
+                                        'title': widget.book.title,
+                                        'price': widget.book.price,
+                                        'description': widget.book.description,
+                                      },
+                                    ),
+                                  ),
                                 );
                                 if (result == true) widget.onUpdated?.call();
                               },
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: primaryColor),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
                                 padding: EdgeInsets.zero,
                               ),
-                              child: const Text("Düzenle", style: TextStyle(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                              child: const Text("Düzenle",
+                                  style: TextStyle(
+                                      color: primaryColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
                             ),
                           ),
                           const SizedBox(width: 4),
                           IconButton(
                             onPressed: _deleteAd,
-                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.red, size: 20),
                           ),
                         ],
                       )
                     else
                       ElevatedButton(
                         onPressed: () {
-                          makePayment(context, widget.book.userId, widget.book.bookId, double.tryParse(widget.book.price) ?? 0);
+                          makePayment(
+                              context,
+                              widget.book.userId,
+                              widget.book.bookId,
+                              double.tryParse(widget.book.price) ?? 0);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 35),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text("Satın Al", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: const Text("Satın Al",
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                   ],
                 ),
@@ -180,12 +233,20 @@ class _BookCardState extends State<BookCard> {
               child: GestureDetector(
                 onTap: () {
                   setState(() => _isFavorite = !_isFavorite);
-                  _isFavorite ? favoriteBooks.add(widget.book) : favoriteBooks.removeWhere((item) => item.bookId == widget.book.bookId);
+                  _isFavorite
+                      ? favoriteBooks.add(widget.book)
+                      : favoriteBooks.removeWhere(
+                          (item) => item.bookId == widget.book.bookId);
                 },
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), shape: BoxShape.circle),
-                  child: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border, color: _isFavorite ? Colors.red : Colors.grey, size: 18),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle),
+                  child: Icon(
+                      _isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: _isFavorite ? Colors.red : Colors.grey,
+                      size: 18),
                 ),
               ),
             ),

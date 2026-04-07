@@ -97,7 +97,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
           if (success) {
             if (!mounted) return;
-            _showSnackBar("İlan başarıyla yayınlandı! 🎉", Colors.green);
+            _showSnackBar("İlan başarıyla yayınlandı! ", Colors.green);
 
             await Future.delayed(const Duration(milliseconds: 600));
 
