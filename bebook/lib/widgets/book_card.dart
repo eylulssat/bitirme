@@ -3,15 +3,13 @@ import '../../main.dart' hide ApiService;
 import '../../services/api_service.dart';
 import '../features/edit_book_screen.dart';
 
-// Define the Book class
+// Book sınıfı model olarak burada tanımlı kalsın
 class Book {
   final int bookId;
   final int userId;
   final String title;
   final String price;
   final String description;
-
-  // opsiyonel alanlar
   final String? author;
   final String? imageUrl;
   final String? university;
@@ -28,7 +26,7 @@ class Book {
   });
 }
 
-// Define the global favoriteBooks list
+// Global favori listesi
 List<Book> favoriteBooks = [];
 
 class BookCard extends StatefulWidget {
@@ -47,6 +45,13 @@ class BookCard extends StatefulWidget {
 
 class _BookCardState extends State<BookCard> {
   bool _isFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sayfa açıldığında bu kitabın favorilerde olup olmadığını kontrol et
+    _isFavorite = favoriteBooks.any((item) => item.bookId == widget.book.bookId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,19 +74,44 @@ class _BookCardState extends State<BookCard> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 📘 Kitap Resmi
+              // 📘 Kitap Resmi Bölümü
               Expanded(
-                child: Image.network(
-                  widget.book.imageUrl?.isNotEmpty == true
-                      ? widget.book.imageUrl!
-                      : "https://via.placeholder.com/150",
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Center(
-                      child: Icon(Icons.image, size: 40, color: Colors.grey),
-                    );
-                  },
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Image.network(
+                    widget.book.imageUrl != null && widget.book.imageUrl!.isNotEmpty
+                        ? widget.book.imageUrl!
+                        : "https://via.placeholder.com/150",
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    // 🔥 Resim yüklenirken gösterilecek yükleme göstergesi
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 2,
+                        ),
+                      );
+                    },
+                    // 🔥 Resim hatalıysa gösterilecek alan
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[100],
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey),
+                            SizedBox(height: 4),
+                            Text("Resim Yok", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
 
@@ -93,14 +123,15 @@ class _BookCardState extends State<BookCard> {
                   children: [
                     Text(
                       widget.book.title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       widget.book.author ?? "Bilinmeyen yazar",
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -111,21 +142,24 @@ class _BookCardState extends State<BookCard> {
                           style: const TextStyle(
                               color: primaryColor,
                               fontWeight: FontWeight.bold,
-                              fontSize: 16),
+                              fontSize: 15),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            widget.book.university ?? "-",
-                            style: const TextStyle(
-                                color: primaryColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold),
+                        Flexible(
+                          child: Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              widget.book.university ?? "BEÜ",
+                              style: const TextStyle(
+                                  color: primaryColor,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                       ],
@@ -141,12 +175,13 @@ class _BookCardState extends State<BookCard> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 35),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
                       ),
-                      child: const Text("Satın Al"),
+                      child: const Text("Satın Al", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
-                    const SizedBox(height: 6),
-                    
                   ],
                 ),
               ),
@@ -163,27 +198,23 @@ class _BookCardState extends State<BookCard> {
                   _isFavorite = !_isFavorite;
                 });
 
-                final currentBook = widget.book;
-
                 if (_isFavorite) {
-                  favoriteBooks.add(currentBook);
+                  favoriteBooks.add(widget.book);
                 } else {
-                  favoriteBooks.removeWhere(
-                    (item) => item.bookId == widget.book.bookId,
-                  );
+                  favoriteBooks.removeWhere((item) => item.bookId == widget.book.bookId);
                 }
               },
               child: Container(
                 padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
                 ),
                 child: Icon(
                   _isFavorite ? Icons.favorite : Icons.favorite_border,
                   color: _isFavorite ? Colors.red : Colors.grey,
-                  size: 20,
+                  size: 18,
                 ),
               ),
             ),

@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // debugPrint için
 
 class ApiService {
   static const String baseUrl = "http://192.168.1.29:8000";
@@ -14,7 +16,7 @@ class ApiService {
         throw Exception("Kitaplar yüklenemedi");
       }
     } catch (e) {
-      print("Bağlantı Hatası: $e");
+      debugPrint("Bağlantı Hatası: $e");
       return [];
     }
   }
@@ -80,46 +82,64 @@ class ApiService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      print("Bağlantı Hatası: $e");
+      debugPrint("Bağlantı Hatası: $e");
       return false;
     }
   }
 
-  // Yeni Kitap İlanı Yayınla
+  // 🔥 GÜNCELLENEN KISIM: Yeni Kitap İlanı Yayınla (Resim Yüklemeli)
   static Future<bool> uploadBook({
-    required int userId, // EKLEDİK: Kitabın sahibini belirlemek için şart!
+    required int userId,
     required String title,
     required String author,
     required String category,
     required double price,
     required String description,
     required String sellerEmail,
-    String imagePath = "",
+    String imagePath = "", // Bu artık seçilen dosyanın tam yolu (path)
   }) async {
     try {
-      final response = await http.post(
+      // JSON yerine MultipartRequest kullanıyoruz çünkü dosya göndereceğiz.
+      var request = http.MultipartRequest(
+        'POST',
         Uri.parse("$baseUrl/books"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "user_id": userId, // Backend bu ID'yi kullanarak veritabanına kaydeder
-          "title": title,
-          "author": author,
-          "category": category,
-          "price": price,
-          "description": description,
-          "seller_email": sellerEmail,
-          "image_path": imagePath,
-        }),
       );
 
+      // Metin alanlarını ekliyoruz (Backend'de Form(...) olarak karşılanmalı)
+      request.fields['user_id'] = userId.toString();
+      request.fields['title'] = title;
+      request.fields['author'] = author;
+      request.fields['category'] = category;
+      request.fields['price'] = price.toString();
+      request.fields['description'] = description;
+      request.fields['seller_email'] = sellerEmail;
+      
+      
+
+      // Eğer resim seçildiyse dosyayı pakete ekliyoruz
+      if (imagePath.isNotEmpty) {
+        File imageFile = File(imagePath);
+        if (await imageFile.exists()) {
+          request.files.add(await http.MultipartFile.fromPath(
+            'file', // Backend'deki "file: UploadFile = File(...)" parametresi ile aynı olmalı
+            imagePath,
+          ));
+        }
+      }
+
+      // İsteği gönderiyoruz
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
       if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint("İlan ve resim başarıyla yüklendi! 🎉");
         return true;
       } else {
-        print("Backend Hatası (${response.statusCode}): ${response.body}");
+        debugPrint("Backend Hatası (${response.statusCode}): ${response.body}");
         return false;
       }
     } catch (e) {
-      print("Yükleme Hatası: $e");
+      debugPrint("Yükleme Hatası: $e");
       return false;
     }
   }

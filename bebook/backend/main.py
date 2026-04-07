@@ -1,15 +1,30 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 import psycopg2
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import iyzipay
+import os
+import shutil
+import uuid
 
 app = FastAPI()
 
-# --- CORS ---
+# --- 🖼️ STATİK DOSYA SERVİSİ (RESİMLER İÇİN) ---
+UPLOAD_DIR = "uploads" 
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# Flutter'ın resimlere erişebilmesi için bu satır kritik
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# --- KENDİ IP ADRESİN ---
+BASE_URL = "http://192.168.1.29:8000" 
+
+# --- CORS AYARLARI ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- DATABASE ---
+# --- VERİTABANI BAĞLANTISI ---
 def get_db_connection():
     return psycopg2.connect(
         host="localhost",
@@ -26,16 +41,16 @@ def get_db_connection():
         user="postgres",
         password="12345",
         port="5432"
-    ) # Parantez burada kapalı olmalı
+    )
 
-# --- IYZICO OPTIONS ---
+# --- IYZICO AYARLARI ---
 IYZICO_OPTIONS = {
     'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
     'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
     'base_url': 'sandbox-api.iyzipay.com'
 }
 
-# --- MODELS ---
+# --- PYDANTIC MODELLERİ (JSON Gelen İstekler İçin) ---
 class UserSignup(BaseModel):
     email: str
     password: str
@@ -58,13 +73,13 @@ class UpdateBook(BaseModel):
     price: float
     description: str    
 
-# --- SIGNUP ---
 class ContactRequest(BaseModel):
     full_name: str
     email: str
     message: str
 
-# --- KAYIT OLMA (SIGNUP) ---
+# --- ENDPOINTS ---
+
 @app.post("/signup")
 async def signup(user: UserSignup):
     conn = get_db_connection()
@@ -88,7 +103,6 @@ async def signup(user: UserSignup):
     finally:
         conn.close()
 
-# --- LOGIN ---
 @app.post("/login")
 async def login(user: UserLogin):
     conn = get_db_connection()
@@ -114,354 +128,6 @@ async def login(user: UserLogin):
     finally:
         conn.close()
 
-# --- CREATE PAYMENT ---
-@app.post("/create-payment")
-async def create_payment(payment: CreatePayment):
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Order oluştur
-        cur.execute(
-            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
-            (payment.user_id, payment.book_id, payment.price, "PENDING")
-        )
-        order_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-
-        request_data = {
-            'locale': 'tr',
-            'conversationId': str(order_id),  # ÖNEMLİ
-            'price': str(payment.price),
-            'paidPrice': str(payment.price),
-            'currency': 'TRY',
-            'basketId': str(order_id),
-            'paymentGroup': 'PRODUCT',
-            'callbackUrl': 'http://192.168.1.29:8000/payment-callback',
-            'buyer': {
-                'id': str(payment.user_id),
-                'name': 'Merve',
-                'surname': 'Bebook',
-                'gsmNumber': '+905350000000',
-                'email': 'test@email.com',
-                'identityNumber': '11111111110',
-                'lastLoginDate': '2023-10-05 12:43:35',
-                'registrationDate': '2023-10-05 12:43:35',
-                'registrationAddress': 'Adres',
-                'ip': '127.0.0.1',
-                'city': 'Istanbul',
-                'country': 'Turkey',
-                'zipCode': '34732'
-            },
-            'shippingAddress': {
-                'contactName': 'Merve Bebook',
-                'city': 'Istanbul',
-                'country': 'Turkey',
-                'address': 'Adres',
-                'zipCode': '34732'
-            },
-            'billingAddress': {
-                'contactName': 'Merve Bebook',
-                'city': 'Istanbul',
-                'country': 'Turkey',
-                'address': 'Adres',
-                'zipCode': '34732'
-            },
-            'basketItems': [
-                {
-                    'id': str(payment.book_id),
-                    'name': 'Kitap',
-                    'category1': 'Egitim',
-                    'itemType': 'PHYSICAL',
-                    'price': str(payment.price)
-                }
-            ]
-        }
-
-        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, IYZICO_OPTIONS)
-        response = checkout_form_initialize.read().decode('utf-8')
-
-        print("IYZICO INIT RESPONSE:", response)
-
-        return json.loads(response)
-
-    finally:
-        conn.close()
-
-# --- PAYMENT CALLBACK ---
-# --- PAYMENT CALLBACK (GÜNCELLENMİŞ VE TAM HALİ) ---
-@app.post("/payment-callback")
-async def payment_callback(request: Request):
-    form_data = await request.form()
-    token = form_data.get("token")
-
-    print("🔥 CALLBACK TOKEN:", token)
-
-    # Token sorgusu yaparken conversationId göndermiyoruz ki iyzico'dakini bozmasın
-    retrieve_request = {
-        'locale': 'tr',
-        'token': token
-    }
-
-    checkout_form = iyzipay.CheckoutForm().retrieve(retrieve_request, IYZICO_OPTIONS)
-    result = json.loads(checkout_form.read().decode('utf-8'))
-
-    print("🔥 IYZICO SONUÇ:", result)
-
-    # iyzico'dan dönen asıl conversationId'yi (order_id) alıyoruz
-    order_id = result.get("conversationId")
-    payment_status = result.get("paymentStatus")
-
-    # KRİTİK DÜZELTME: Eğer ID 0 gelirse basketId'yi dene
-    if not order_id or order_id == "0":
-        order_id = result.get("basketId")
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        print(f"DEBUG: iyzico'dan gelen durum: '{payment_status}', Gerçek ID: {order_id}") 
-        
-        if payment_status == "SUCCESS":
-            # order_id'yi int yaparak veritabanına gönderiyoruz
-            cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
-                        ("SUCCESS", int(order_id)))
-            
-            status_text = "Ödeme Başarılı!"
-            sub_text = "İşleminiz tamamlandı. Uygulamaya geri dönebilirsiniz."
-            main_color = "#2ecc71"  # Yeşil
-            icon = "✔️"
-        else:
-            cur.execute("UPDATE orders SET status = %s WHERE order_id = %s",
-                        ("FAILED", int(order_id)))
-            
-            status_text = "Ödeme Başarısız!"
-            main_color = "#e74c3c" # Kırmızı
-            sub_text = "Ödeme onaylanmadı. Lütfen tekrar deneyin."
-            icon = "❌"
-
-        conn.commit()
-        cur.close()
-    except Exception as e:
-        print(f"Hata: {e}")
-        status_text = "Bir hata oluştu"
-        main_color = "orange"
-        sub_text = f"Hata detayı: {e}"
-        icon = "⚠️"
-    finally:
-        if conn:
-            conn.close()
-
-    # HTML ÇIKTISI (Kullanıcı butona bastığında pencereyi kapatmaya çalışacak)
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {{ background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }}
-                .card {{ background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 80%; max-width: 400px; }}
-                .icon {{ font-size: 60px; margin-bottom: 20px; }}
-                h2 {{ color: {main_color}; margin: 0 0 10px 0; }}
-                p {{ color: #7f8c8d; font-size: 16px; }}
-                .btn {{ margin-top: 25px; background-color: {main_color}; color: white; padding: 12px 30px; border-radius: 30px; text-decoration: none; display: inline-block; font-weight: bold; border: none; cursor: pointer; }}
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <div class="icon">{icon}</div>
-                <h2>{status_text}</h2>
-                <p>{sub_text}</p>
-                <button class="btn" onclick="window.close()">Tamam</button>
-            </div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
-
-@app.get("/order-status/{order_id}")
-async def order_status(order_id: int):
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT status FROM orders WHERE order_id = %s", (order_id,))
-        result = cur.fetchone()
-        cur.close()
-
-        if not result:
-            return {"status": "NOT_FOUND"}
-
-        return {"status": result[0]}
-
-    finally:
-        conn.close()
-
-@app.put("/update-book")
-async def update_book(book: UpdateBook):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Güvenlik: sadece kendi ilanını güncelleyebilsin
-        cur.execute(
-            "SELECT user_id FROM books WHERE book_id = %s",
-            (book.book_id,)
-        )
-        result = cur.fetchone()
-
-        if not result:
-            raise HTTPException(status_code=404, detail="İlan bulunamadı")
-
-        if result[0] != book.user_id:
-            raise HTTPException(status_code=403, detail="Yetkisiz işlem")
-
-        # Güncelle
-        cur.execute("""
-            UPDATE books
-            SET title = %s, price = %s, description = %s
-            WHERE book_id = %s
-        """, (book.title, book.price, book.description, book.book_id))
-        print("GELEN BOOK ID:", book.book_id)
-        print("GELEN USER ID:", book.user_id)
-        print("GÜNCELLENEN SATIR:", cur.rowcount)
-        
-
-        conn.commit()
-        cur.close()
-
-        return {"status": "success", "message": "İlan güncellendi"}
-
-    finally:
-        conn.close()        
-
-@app.delete("/delete-book/{book_id}/{user_id}")
-async def delete_book(book_id: int, user_id: int):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Yetki kontrolü
-        cur.execute(
-            "SELECT user_id FROM books WHERE book_id = %s",
-            (book_id,)
-        )
-        result = cur.fetchone()
-
-        if not result:
-            raise HTTPException(status_code=404, detail="İlan bulunamadı")
-
-        if result[0] != user_id:
-            raise HTTPException(status_code=403, detail="Yetkisiz işlem")
-
-        cur.execute("DELETE FROM books WHERE book_id = %s", (book_id,))
-        conn.commit()
-        cur.close()
-
-        return {"status": "success", "message": "İlan silindi"}
-
-    finally:
-        conn.close()    
-@app.get("/my-books/{user_id}")
-async def get_my_books(user_id: int):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT book_id, user_id, title, price, description
-            FROM books
-            WHERE user_id = %s
-        """, (user_id,))
-
-        books = cur.fetchall()
-
-        result = []
-        for b in books:
-            result.append({
-                "book_id": b[0],
-                "user_id": b[1],
-                "title": b[2],
-                "price": b[3],
-                "description": b[4],
-            })
-
-        return result
-
-    finally:
-        conn.close()            
-        if conn:
-            conn.close()
-
-# --- İLETİŞİM MESAJI (CONTACT) ---
-@app.post("/contact")
-async def send_contact_message(request: ContactRequest):
-    conn = None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # public. şemasıyla tam yol gösteriyoruz
-        cur.execute(
-            "INSERT INTO public.contact_messages (full_name, email, message) VALUES (%s, %s, %s)",
-            (request.full_name, request.email, request.message)
-        )
-        
-        conn.commit()
-        cur.close()
-        return {"status": "success", "message": "Mesajınız başarıyla iletildi!"}
-    
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"İletişim Hatası: {e}")
-        raise HTTPException(status_code=500, detail="Mesaj gönderilirken bir hata oluştu.")
-    finally:
-        if conn:
-            conn.close()
-
-            # --- KİTAP EKLEME MODELİ ---
-class BookCreate(BaseModel):
-    user_id: int
-    title: str
-    author: str
-    category: str
-    price: float
-    description: str
-    seller_email: str
-    image_path: str = None # Fotoğraf yolu şimdilik boş olabilir
-
-# --- KİTAP YÜKLEME ENDPOINT'İ (ADD BOOK) ---
-@app.post("/books")
-async def add_book(book: BookCreate):
-    conn = None
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Sorguya user_id (veya senin DB'ndeki kolon adı neyse) eklendi
-        cur.execute(
-            """INSERT INTO public.books 
-            (user_id, title, author, category, price, description, seller_email, image_path) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (book.user_id, book.title, book.author, book.category, book.price, 
-             book.description, book.seller_email, book.image_path)
-        )
-        
-        conn.commit()
-        cur.close()
-        return {"status": "success", "message": "Kitap ilanı başarıyla oluşturuldu!"}
-    
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"Kitap Ekleme Hatası: {e}")
-        raise HTTPException(status_code=500, detail="Kitap eklenirken bir hata oluştu.")
-    finally:
-        if conn:
-            conn.close()
 @app.get("/books")
 async def get_all_books():
     conn = get_db_connection()
@@ -472,6 +138,8 @@ async def get_all_books():
         
         result = []
         for b in books:
+            # Resim ismini tam URL'e çeviriyoruz
+            image_url = f"{BASE_URL}/uploads/{b[7]}" if b[7] else None
             result.append({
                 "book_id": b[0],
                 "user_id": b[1],
@@ -480,8 +148,185 @@ async def get_all_books():
                 "category": b[4],
                 "price": b[5],
                 "description": b[6],
-                "image_path": b[7]
+                "image_path": image_url
             })
         return result
     finally:
         conn.close()
+
+@app.get("/my-books/{user_id}")
+async def get_my_books(user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT book_id, user_id, title, price, description, image_path
+            FROM books
+            WHERE user_id = %s
+        """, (user_id,))
+        books = cur.fetchall()
+
+        result = []
+        for b in books:
+            image_url = f"{BASE_URL}/uploads/{b[5]}" if b[5] else None
+            result.append({
+                "book_id": b[0],
+                "user_id": b[1],
+                "title": b[2],
+                "price": b[3],
+                "description": b[4],
+                "image_path": image_url
+            })
+        return result
+    finally:
+        conn.close()
+
+# --- 🔥 GÜNCELLENEN: RESİM YÜKLEMELİ KİTAP EKLEME ---
+@app.post("/books")
+async def add_book(
+    user_id: int = Form(...),
+    title: str = Form(...),
+    author: str = Form(...),
+    category: str = Form(...),
+    price: float = Form(...),
+    description: str = Form(...),
+    seller_email: str = Form(...),
+    file: UploadFile = File(None) # Resim dosyası buradan gelir
+):
+    conn = None
+    image_name = None
+    
+    try:
+        # 1. Dosya varsa kaydet
+        if file:
+            ext = file.filename.split('.')[-1]
+            image_name = f"{uuid.uuid4()}.{ext}"
+            file_path = os.path.join(UPLOAD_DIR, image_name)
+
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+        # 2. Veritabanına sadece dosya ismini kaydet
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO public.books 
+            (user_id, title, author, category, price, description, seller_email, image_path) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (user_id, title, author, category, price, description, seller_email, image_name)
+        )
+        conn.commit()
+        cur.close()
+        return {"status": "success", "message": "Kitap ve resim yüklendi!"}
+    
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/create-payment")
+async def create_payment(payment: CreatePayment):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
+            (payment.user_id, payment.book_id, payment.price, "PENDING")
+        )
+        order_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+
+        request_data = {
+            'locale': 'tr',
+            'conversationId': str(order_id),
+            'price': str(payment.price),
+            'paidPrice': str(payment.price),
+            'currency': 'TRY',
+            'basketId': str(order_id),
+            'paymentGroup': 'PRODUCT',
+            'callbackUrl': f'{BASE_URL}/payment-callback',
+            'buyer': {
+                'id': str(payment.user_id),
+                'name': 'Merve',
+                'surname': 'Bebook',
+                'gsmNumber': '+905350000000',
+                'email': 'test@email.com',
+                'identityNumber': '11111111110',
+                'city': 'Zonguldak',
+                'country': 'Turkey',
+                'zipCode': '67100'
+            },
+            'basketItems': [{'id': str(payment.book_id), 'name': 'Kitap', 'category1': 'Egitim', 'itemType': 'PHYSICAL', 'price': str(payment.price)}]
+        }
+        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, IYZICO_OPTIONS)
+        return json.loads(checkout_form_initialize.read().decode('utf-8'))
+    finally:
+        conn.close()
+
+@app.post("/payment-callback")
+async def payment_callback(request: Request):
+    form_data = await request.form()
+    token = form_data.get("token")
+    retrieve_request = {'locale': 'tr', 'token': token}
+    checkout_form = iyzipay.CheckoutForm().retrieve(retrieve_request, IYZICO_OPTIONS)
+    result = json.loads(checkout_form.read().decode('utf-8'))
+
+    order_id = result.get("conversationId") or result.get("basketId")
+    payment_status = result.get("paymentStatus")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        status_db = "SUCCESS" if payment_status == "SUCCESS" else "FAILED"
+        cur.execute("UPDATE orders SET status = %s WHERE order_id = %s", (status_db, int(order_id)))
+        conn.commit()
+        
+        main_color = "#2ecc71" if status_db == "SUCCESS" else "#e74c3c"
+        icon = "✔️" if status_db == "SUCCESS" else "❌"
+        status_text = "Ödeme Başarılı!" if status_db == "SUCCESS" else "Ödeme Başarısız!"
+    finally:
+        conn.close()
+
+    html_content = f"""
+    <html>
+        <body style="display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f4f7f6;">
+            <div style="text-align:center; padding:50px; background:white; border-radius:30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);">
+                <div style="font-size:80px;">{icon}</div>
+                <h2 style="color:{main_color}; font-size:30px;">{status_text}</h2>
+                <p style="color:#777;">Uygulamaya dönebilirsiniz.</p>
+                <button style="background:{main_color}; color:white; padding:12px 25px; border:none; border-radius:15px; font-weight:bold; cursor:pointer; margin-top:20px;" onclick="window.close()">TAMAM</button>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@app.put("/update-book")
+async def update_book(book: UpdateBook):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE books SET title = %s, price = %s, description = %s WHERE book_id = %s AND user_id = %s", 
+                    (book.title, book.price, book.description, book.book_id, book.user_id))
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
+
+@app.delete("/delete-book/{book_id}/{user_id}")
+async def delete_book(book_id: int, user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM books WHERE book_id = %s AND user_id = %s", (book_id, user_id))
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
+
+@app.post("/contact")
+async def contact(req: ContactRequest):
+    # İletişim mesajlarını buraya kaydedebilir veya e-posta atabilirsin.
+    return {"status": "success", "message": "Mesajınız iletildi."}

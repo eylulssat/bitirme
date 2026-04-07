@@ -7,7 +7,6 @@ import 'favorites_screen.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
 
-// 🔥 DÜZENLEME: Sınıf ismi public yapıldı (MainWrapper'dan erişim için)
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -15,10 +14,9 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-// 🔥 DÜZENLEME: State ismi public yapıldı (GlobalKey kullanımı için)
 class ProfileScreenState extends State<ProfileScreen> {
   List<Book> myBooks = [];
-  bool isLoading = false; 
+  bool isLoading = false;
   bool isLoggedIn = false;
 
   String? userEmail;
@@ -26,15 +24,19 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
+  // 🔥 BACKEND URL TANIMI: Görsellerin görünmesi için bu adres şarttır.
+  // Emulator için: 10.0.2.2, Gerçek cihaz için: Bilgisayarınızın IP adresi.
+  final String baseUrl = "http://192.168.1.29:8000/uploads/";
+
   @override
   void initState() {
     super.initState();
-    if (isLoggedIn) {
+    // Eğer kullanıcı zaten giriş yapmışsa kitapları çek
+    if (isLoggedIn && userId != null) {
       fetchMyBooks();
     }
   }
 
-  // 🔥 DÜZENLEME: Fonksiyon ismi public yapıldı (Dışarıdan tetiklemek için)
   // KULLANICININ KENDİ İLANLARINI ÇEKME
   Future<void> fetchMyBooks() async {
     if (userId == null) return;
@@ -45,18 +47,31 @@ class ProfileScreenState extends State<ProfileScreen> {
       final data = await ApiService.getMyBooks(userId!);
 
       setState(() {
-        myBooks = data
-            .map<Book>((b) => Book(
-                  bookId: b['book_id'],
-                  userId: b['user_id'],
-                  title: b['title'],
-                  author: b['author'] ?? "Bilinmiyor",
-                  price: b['price'].toString(),
-                  imageUrl: b['imageUrl'] ?? "https://via.placeholder.com/150",
-                  university: b['university'] ?? "Zonguldak BEÜ",
-                  description: b['description'] ?? "",
-                ))
-            .toList();
+        myBooks = data.map<Book>((b) {
+          // 🔥 GÖRSEL YOLU DÜZENLEME: 
+          // Eğer veritabanından gelen path tam bir URL değilse, başına baseUrl ekliyoruz.
+          String rawPath = b['image_path'] ?? b['imageUrl'] ?? "";
+          String finalImageUrl = "https://via.placeholder.com/150";
+
+          if (rawPath.isNotEmpty) {
+            if (rawPath.startsWith('http')) {
+              finalImageUrl = rawPath;
+            } else {
+              finalImageUrl = "$baseUrl$rawPath";
+            }
+          }
+
+          return Book(
+            bookId: b['book_id'] ?? b['id'],
+            userId: b['user_id'] ?? userId,
+            title: b['title'] ?? "Bilinmiyor",
+            author: b['author'] ?? "Bilinmiyor",
+            price: b['price'].toString(),
+            imageUrl: finalImageUrl, // Düzenlenmiş tam yol
+            university: b['university'] ?? "Zonguldak BEÜ",
+            description: b['description'] ?? "",
+          );
+        }).toList();
       });
     } catch (e) {
       debugPrint("Profil Kitapları Yükleme Hatası: $e");
@@ -69,7 +84,8 @@ class ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
 
-    if (isLoggedIn && myBooks.isEmpty && !isLoading) {
+    // Eğer login olduysa ve liste boşsa otomatik çek (Güvenlik önlemi)
+    if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
       fetchMyBooks();
     }
 
@@ -141,7 +157,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                       userDepartment = result['department'];
                       userId = result['user_id'];
                     });
-                    fetchMyBooks(); 
+                    fetchMyBooks();
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -217,7 +233,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 17)),
                       const SizedBox(height: 4),
-                      Text(userUniversity ?? "Üniversite belirtilmemiş",
+                      Text(userUniversity ?? "Zonguldak Bülent Ecevit Üniversitesi",
                           style: const TextStyle(
                               color: Colors.grey, fontSize: 14)),
                     ],
@@ -263,11 +279,10 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showMyBooksSheet() {
-    // 🔥 ÖNEMLİ: Panel açılırken listenin güncel olduğundan emin oluyoruz
     if (myBooks.isEmpty && !isLoading) {
       fetchMyBooks();
     }
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

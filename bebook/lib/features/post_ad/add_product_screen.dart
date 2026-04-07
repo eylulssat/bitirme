@@ -81,7 +81,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
             return;
           }
 
-          // API'ye Gönderim
+          // --- API'ye Gönderim ---
+          // imagePath kısmında .split('/').last kullanarak sadece dosya adını gönderiyoruz.
           bool success = await ApiService.uploadBook(
             userId: widget.userId ?? 4,
             title: _nameController.text.trim(),
@@ -98,12 +99,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             if (!mounted) return;
             _showSnackBar("İlan başarıyla yayınlandı! 🎉", Colors.green);
 
-            // Snackbar'ın okunması için çok kısa bir bekleme
             await Future.delayed(const Duration(milliseconds: 600));
 
             if (!mounted) return;
-            // 🔥 BURASI KRİTİK: true döndürerek MainWrapper'a "yenile" emri gönderiyoruz.
-            Navigator.pop(context, true); 
+            Navigator.pop(context, true);
           } else {
             if (!mounted) return;
             _showSnackBar("Hata: Sunucuya bağlanılamadı.", Colors.red);
@@ -201,7 +200,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // Yardımcı Widgetlar ve Fonksiyonlar...
   void _showPickOptions() {
     showModalBottomSheet(
       context: context,
