@@ -49,8 +49,9 @@ class _BookCardState extends State<BookCard> {
   @override
   void initState() {
     super.initState();
-    // Sayfa açıldığında bu kitabın favorilerde olup olmadığını kontrol et
-    _isFavorite = favoriteBooks.any((item) => item.bookId == widget.book.bookId);
+    print("Karttaki Kitap Yazarı: ${widget.book.author}");
+    _isFavorite =
+        favoriteBooks.any((item) => item.bookId == widget.book.bookId);
   }
 
   @override
@@ -77,9 +78,11 @@ class _BookCardState extends State<BookCard> {
               // 📘 Kitap Resmi Bölümü
               Expanded(
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Image.network(
-                    widget.book.imageUrl != null && widget.book.imageUrl!.isNotEmpty
+                    widget.book.imageUrl != null &&
+                            widget.book.imageUrl!.isNotEmpty
                         ? widget.book.imageUrl!
                         : "https://via.placeholder.com/150",
                     width: double.infinity,
@@ -104,9 +107,12 @@ class _BookCardState extends State<BookCard> {
                         child: const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey),
+                            Icon(Icons.broken_image_outlined,
+                                size: 40, color: Colors.grey),
                             SizedBox(height: 4),
-                            Text("Resim Yok", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            Text("Resim Yok",
+                                style: TextStyle(
+                                    fontSize: 10, color: Colors.grey)),
                           ],
                         ),
                       );
@@ -123,12 +129,16 @@ class _BookCardState extends State<BookCard> {
                   children: [
                     Text(
                       widget.book.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      widget.book.author ?? "Bilinmeyen yazar",
+                      (widget.book.author != null &&
+                              widget.book.author!.isNotEmpty)
+                          ? widget.book.author!
+                          : "Yazar Belirtilmemiş",
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -147,7 +157,8 @@ class _BookCardState extends State<BookCard> {
                         Flexible(
                           child: Container(
                             margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: primaryColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(6),
@@ -177,10 +188,13 @@ class _BookCardState extends State<BookCard> {
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 35),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                         elevation: 0,
                       ),
-                      child: const Text("Satın Al", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: const Text("Satın Al",
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -201,7 +215,8 @@ class _BookCardState extends State<BookCard> {
                 if (_isFavorite) {
                   favoriteBooks.add(widget.book);
                 } else {
-                  favoriteBooks.removeWhere((item) => item.bookId == widget.book.bookId);
+                  favoriteBooks
+                      .removeWhere((item) => item.bookId == widget.book.bookId);
                 }
               },
               child: Container(
@@ -209,7 +224,9 @@ class _BookCardState extends State<BookCard> {
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
                   shape: BoxShape.circle,
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 4)
+                  ],
                 ),
                 child: Icon(
                   _isFavorite ? Icons.favorite : Icons.favorite_border,

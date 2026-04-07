@@ -159,8 +159,9 @@ async def get_my_books(user_id: int):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        # SORGUDAN SONRA 'author' alanını ekledik:
         cur.execute("""
-            SELECT book_id, user_id, title, price, description, image_path
+            SELECT book_id, user_id, title, author, price, description, image_path
             FROM books
             WHERE user_id = %s
         """, (user_id,))
@@ -168,13 +169,14 @@ async def get_my_books(user_id: int):
 
         result = []
         for b in books:
-            image_url = f"{BASE_URL}/uploads/{b[5]}" if b[5] else None
+            image_url = f"{BASE_URL}/uploads/{b[6]}" if b[6] else None
             result.append({
                 "book_id": b[0],
                 "user_id": b[1],
                 "title": b[2],
-                "price": b[3],
-                "description": b[4],
+                "author": b[3], # Artık yazar bilgisi listede
+                "price": b[4],
+                "description": b[5],
                 "image_path": image_url
             })
         return result
