@@ -377,28 +377,48 @@ async def create_payment(payment: CreatePayment):
 @app.post("/payment-callback")
 async def payment_callback(request: Request):
     form_data = await request.form()
-    token = form_data.get("token")
-    retrieve_request = {'locale': 'tr', 'token': token}
-    checkout_form = iyzipay.CheckoutForm().retrieve(retrieve_request, IYZICO_OPTIONS)
-    result = json.loads(checkout_form.read().decode('utf-8'))
+    token = form_data.get('token') # Iyzico'dan gelen tek veri bu
 
-    order_id = result.get("conversationId") or result.get("basketId")
-    payment_status = result.get("paymentStatus")
+    if not token:
+        return HTMLResponse(content="Geçersiz istek (Token yok)", status_code=400)
 
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        status_db = "SUCCESS" if payment_status == "SUCCESS" else "FAILED"
-        cur.execute("UPDATE orders SET status = %s WHERE order_id = %s", (status_db, int(order_id)))
-        conn.commit()
-        
-        main_color = "#2ecc71" if status_db == "SUCCESS" else "#e74c3c"
-        icon = "✔️" if status_db == "SUCCESS" else "❌"
-        status_text = "Ödeme Başarılı!" if status_db == "SUCCESS" else "Ödeme Başarısız!"
-    finally:
-        conn.close()
+    # 1. İyzipay'e bu token ile sonucun ne olduğunu soruyoruz
+    iyzico_request = {'token': token}
+    checkout_form_result = iyzipay.CheckoutForm().retrieve(iyzico_request, IYZICO_OPTIONS)
+    
+    # Gelen yanıtı JSON'a çevirip kontrol edelim
+    result = json.loads(checkout_form_result.read().decode('utf-8'))
+    
+    # Debug için terminale detayları yazdıralım
+    print("--- IYZICO SORGULAMA SONUCU ---")
+    print(json.dumps(result, indent=2))
 
-    # payment_callback içindeki mevcut html_content kısmını silip bunu yapıştır:
+    payment_status = result.get('paymentStatus') # 'SUCCESS' veya 'FAILURE' döner
+    order_id = result.get('conversationId')      # Veritabanındaki order_id
+
+    if payment_status == 'SUCCESS':
+        # 2. Veritabanını Güncelle
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("UPDATE orders SET status = 'SUCCESS' WHERE order_id = %s", (order_id,))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"DB Güncelleme Hatası: {e}")
+
+        status_text = "Ödeme Başarılı!"
+        main_color = "#2ecc71"
+        description = "İşleminiz başarıyla tamamlandı. Diğer ilanları incelemek için ana sayfaya dönebilirsiniz.!"
+    else:
+        status_text = "Ödeme Başarısız"
+        main_color = "#e74c3c"
+        error_msg = result.get('errorMessage', 'Ödeme onaylanmadı.')
+        description = f"Sorun oluştu: {error_msg}"
+
+    # HTML içeriği (Aynı kalabilir)
+    # HTML içeriği (Mobil uyumlu hale getirildi)
     html_content = f"""
     <!DOCTYPE html>
     <html lang="tr">
@@ -407,17 +427,24 @@ async def payment_callback(request: Request):
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Ödeme Sonucu</title>
     </head>
-    <body style="display:flex; align-items:center; justify-content:center; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f4f7f6; margin:0; padding: 20px; box-sizing: border-box;">
-        <div style="text-align:center; padding:40px 20px; background:white; border-radius:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 100%; max-width: 350px;">
-            <div style="font-size:80px; margin-bottom: 20px;">{icon}</div>
-            <h2 style="color:{main_color}; font-size:26px; margin: 0 0 10px 0;">{status_text}</h2>
-            <p style="color:#666; font-size:16px; line-height: 1.5; margin-bottom: 30px;">
-                İşleminiz başarıyla tamamlandı.<br>Uygulamaya güvenle dönebilirsiniz.
-            </p>
-            <button style="background:{main_color}; color:white; padding:16px; border:none; border-radius:16px; font-weight:bold; cursor:pointer; width:100%; font-size:16px; transition: opacity 0.2s;" 
-                    onclick="window.close()">
-                TAMAM
-            </button>
+    <body style="display:flex; align-items:center; justify-content:center; height:100vh; margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f4f7f6;">
+        <div style="text-align:center; padding:30px; background:white; border-radius:28px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 85%; max-width: 400px;">
+            <div style="font-size: 60px; margin-bottom: 20px;">{"" if payment_status == 'SUCCESS' else ""}</div>
+            <h1 style="color:{main_color}; font-size: 24px; margin-bottom: 10px;">{status_text}</h1>
+            <p style="color:#666; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">{description}</p>
+            
+            <a href="bebook://home" style="
+                display: block;
+                text-decoration: none;
+                background: white;
+                color: black;
+                padding: 16px;
+                border: 2px solid black;
+                border-radius: 16px;
+                font-weight: 800;
+                font-size: 16px;
+                text-transform: uppercase;
+            ">ANA SAYFAYA DÖN</a>
         </div>
     </body>
     </html>
