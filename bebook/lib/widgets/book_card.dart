@@ -27,6 +27,7 @@ class Book {
 }
 
 List<Book> favoriteBooks = [];
+List<Book> cartBooks = []; // Sepet için global liste
 
 class BookCard extends StatefulWidget {
   final Book book;
@@ -202,11 +203,34 @@ class _BookCardState extends State<BookCard> {
                     else
                       ElevatedButton(
                         onPressed: () {
-                          makePayment(
-                              context,
-                              widget.book.userId,
-                              widget.book.bookId,
-                              double.tryParse(widget.book.price) ?? 0);
+                          setState(() {
+                            // 1. Kitap zaten sepette mi kontrol et
+                            bool isAlreadyInCart = cartBooks.any(
+                                (item) => item.bookId == widget.book.bookId);
+
+                            if (!isAlreadyInCart) {
+                              // 2. Sepete ekle
+                              cartBooks.add(widget.book);
+
+                              // 3. Kullanıcıya bildirim ver
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      "${widget.book.title} sepete eklendi!"),
+                                  backgroundColor: Colors.green,
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            } else {
+                              // 4. Uyarı ver
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Bu kitap zaten sepetinizde!"),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          });
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,
@@ -215,7 +239,7 @@ class _BookCardState extends State<BookCard> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text("Satın Al",
+                        child: const Text("Sepete Ekle", // Metni güncelledik
                             style: TextStyle(
                                 fontSize: 12, fontWeight: FontWeight.bold)),
                       ),

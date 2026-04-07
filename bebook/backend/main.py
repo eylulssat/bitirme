@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 import psycopg2
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,47 +10,17 @@ import iyzipay
 import os
 import shutil
 import uuid
+from typing import List
 
+# 1. ÖNCE APP NESNESİNİ OLUŞTUR
 app = FastAPI()
 
-# --- 🖼️ STATİK DOSYA SERVİSİ (RESİMLER İÇİN) ---
-UPLOAD_DIR = "uploads" 
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
+# 2. PYDANTIC MODELLERİ
+class BulkPaymentRequest(BaseModel):
+    user_id: int
+    book_ids: List[int]
+    total_price: float
 
-# Flutter'ın resimlere erişebilmesi için bu satır kritik
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-
-# --- KENDİ IP ADRESİN ---
-BASE_URL = "http://192.168.1.29:8000" 
-
-# --- CORS AYARLARI ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- VERİTABANI BAĞLANTISI ---
-def get_db_connection():
-    return psycopg2.connect(
-        host="localhost",
-        database="bebook",
-        user="postgres",
-        password="12345",
-        port="5432"
-    )
-
-# --- IYZICO AYARLARI ---
-IYZICO_OPTIONS = {
-    'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
-    'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
-    'base_url': 'sandbox-api.iyzipay.com'
-}
-
-# --- PYDANTIC MODELLERİ (JSON Gelen İstekler İçin) ---
 class UserSignup(BaseModel):
     email: str
     password: str
@@ -78,7 +48,118 @@ class ContactRequest(BaseModel):
     email: str
     message: str
 
-# --- ENDPOINTS ---
+# --- 🖼️ STATİK DOSYA VE CORS AYARLARI ---
+UPLOAD_DIR = "uploads" 
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+BASE_URL = "http://192.168.1.29:8000" 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- VERİTABANI BAĞLANTISI ---
+def get_db_connection():
+    return psycopg2.connect(
+        host="localhost",
+        database="bebook",
+        user="postgres",
+        password="12345",
+        port="5432"
+    )
+
+# --- IYZICO AYARLARI ---
+IYZICO_OPTIONS = {
+    'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
+    'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
+    'base_url': 'sandbox-api.iyzipay.com'
+}
+
+# --- 🛒 YENİ EKLENEN: TOPLU ÖDEME ROTASI ---
+@app.post("/bulk-payment")
+async def bulk_payment(request: BulkPaymentRequest):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # HATA ALAN KISIM BURASIYDI: 
+        # Ana tabloya (orders) kayıt atarken sepetteki ilk kitabın ID'sini veriyoruz 
+        # ki 'NOT NULL' kısıtlaması bozulmasın.
+        first_book_id = request.book_ids[0] if request.book_ids else None
+
+        cur.execute(
+            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
+            (request.user_id, first_book_id, request.total_price, "PENDING")
+        )
+        order_id = cur.fetchone()[0]
+        conn.commit()
+
+        # ... (İyzipay sepet hazırlama kısımları aynı kalıyor) ...
+        
+        # İyzipay basket_items kısmında tüm kitapları tek tek eklemeye devam et
+        basket_items = []
+        for b_id in request.book_ids:
+            item = {
+                'id': str(b_id),
+                'name': f'Kitap ID: {b_id}',
+                'category1': 'Egitim',
+                'itemType': 'PHYSICAL',
+                'price': str(request.total_price / len(request.book_ids))
+            }
+            basket_items.append(item)
+
+        # İyzipay isteğini gönder...
+
+        # 3. İyzipay Form Başlatma İsteği
+        iyzico_request = {
+            'locale': 'tr',
+            'conversationId': str(order_id),
+            'price': str(request.total_price),
+            'paidPrice': str(request.total_price),
+            'currency': 'TRY',
+            'basketId': str(order_id),
+            'paymentGroup': 'PRODUCT',
+            'callbackUrl': f'{BASE_URL}/payment-callback', # Ödeme bitince döneceği adres
+            'buyer': {
+                'id': str(request.user_id),
+                'name': 'Merve',
+                'surname': 'Bebook',
+                'gsmNumber': '+905350000000',
+                'email': 'test@email.com',
+                'identityNumber': '11111111110',
+                'city': 'Zonguldak',
+                'country': 'Turkey',
+                'zipCode': '67100',
+                'registrationAddress': 'ZBEU Kampusu'
+            },
+            'shippingAddress': {
+                'contactName': 'Merve Bebook', 'city': 'Zonguldak', 'country': 'Turkey', 
+                'address': 'Incivez Mah.', 'zipCode': '67100'
+            },
+            'billingAddress': {
+                'contactName': 'Merve Bebook', 'city': 'Zonguldak', 'country': 'Turkey', 
+                'address': 'Incivez Mah.', 'zipCode': '67100'
+            },
+            'basketItems': basket_items
+        }
+
+        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(iyzico_request, IYZICO_OPTIONS)
+        # İyzipay'den gelen veriyi JSON olarak Flutter'a gönderiyoruz
+        return json.loads(checkout_form_initialize.read().decode('utf-8'))
+
+    except Exception as e:
+        print(f"İyzipay Hatası: {e}")
+        return {"status": "failure", "errorMessage": str(e)}
+    finally:
+        conn.close()
+
+# --- DİĞER ENDPOINTS (Geri Kalanlar Aynı) ---
 
 @app.post("/signup")
 async def signup(user: UserSignup):
@@ -102,6 +183,12 @@ async def signup(user: UserSignup):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         conn.close()
+
+# ... (Buradan sonraki /login, /books vb. tüm kodlarını altına yapıştırabilirsin)
+
+
+
+        
 
 @app.post("/login")
 async def login(user: UserLogin):
@@ -311,16 +398,28 @@ async def payment_callback(request: Request):
     finally:
         conn.close()
 
+    # payment_callback içindeki mevcut html_content kısmını silip bunu yapıştır:
     html_content = f"""
-    <html>
-        <body style="display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f4f7f6;">
-            <div style="text-align:center; padding:50px; background:white; border-radius:30px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);">
-                <div style="font-size:80px;">{icon}</div>
-                <h2 style="color:{main_color}; font-size:30px;">{status_text}</h2>
-                <p style="color:#777;">Uygulamaya dönebilirsiniz.</p>
-                <button style="background:{main_color}; color:white; padding:12px 25px; border:none; border-radius:15px; font-weight:bold; cursor:pointer; margin-top:20px;" onclick="window.close()">TAMAM</button>
-            </div>
-        </body>
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Ödeme Sonucu</title>
+    </head>
+    <body style="display:flex; align-items:center; justify-content:center; height:100vh; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f4f7f6; margin:0; padding: 20px; box-sizing: border-box;">
+        <div style="text-align:center; padding:40px 20px; background:white; border-radius:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 100%; max-width: 350px;">
+            <div style="font-size:80px; margin-bottom: 20px;">{icon}</div>
+            <h2 style="color:{main_color}; font-size:26px; margin: 0 0 10px 0;">{status_text}</h2>
+            <p style="color:#666; font-size:16px; line-height: 1.5; margin-bottom: 30px;">
+                İşleminiz başarıyla tamamlandı.<br>Uygulamaya güvenle dönebilirsiniz.
+            </p>
+            <button style="background:{main_color}; color:white; padding:16px; border:none; border-radius:16px; font-weight:bold; cursor:pointer; width:100%; font-size:16px; transition: opacity 0.2s;" 
+                    onclick="window.close()">
+                TAMAM
+            </button>
+        </div>
+    </body>
     </html>
     """
     return HTMLResponse(content=html_content)

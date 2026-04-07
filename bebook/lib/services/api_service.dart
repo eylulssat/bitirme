@@ -37,7 +37,6 @@ class ApiService {
           "price": price,
         }),
       );
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
@@ -49,7 +48,7 @@ class ApiService {
     }
   }
 
-  // ✉️ İletişim Formu Mesajını Gönder (Kırmızı yanan kısım burasıydı, eklendi)
+  // ✉️ İletişim Formu
   static Future<bool> sendContactMessage(String fullName, String email, String message) async {
     try {
       final response = await http.post(
@@ -61,7 +60,6 @@ class ApiService {
           "message": message,
         }),
       );
-      // Backend 200 veya 201 döndüğünde başarılı kabul ediyoruz
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       debugPrint("İletişim Hatası: $e");
@@ -115,7 +113,7 @@ class ApiService {
     }
   }
 
-  // 📂 Kullanıcının Kendi İlanlarını Getir
+  // 📂 Kullanıcının İlanlarını Getir
   static Future<List<dynamic>> getMyBooks(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/my-books/$userId'));
     if (response.statusCode == 200) {
@@ -161,4 +159,32 @@ class ApiService {
       return false;
     }
   }
-}
+
+  // 🛒 Toplu Ödeme İşlemi (Hata buradaydı, içeri aldık)
+  static Future<Map<String, dynamic>> makeBulkPayment({
+    required int userId,
+    required List<int> bookIds,
+    required double totalPrice,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/bulk-payment"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "user_id": userId,
+          "book_ids": bookIds,
+          "total_price": totalPrice,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Ödeme sırasında bir sorun oluştu."};
+      }
+    } catch (e) {
+      debugPrint("Toplu Ödeme API Hatası: $e");
+      return {"status": "error", "message": "Bağlantı hatası oluştu."};
+    }
+  }
+} // Sınıfın bittiği yer burası olmalı!
