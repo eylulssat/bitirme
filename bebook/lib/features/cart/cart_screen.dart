@@ -14,7 +14,8 @@ class CartScreen extends StatefulWidget {
 
 // 1. WidgetsBindingObserver ekleyerek uygulama hareketlerini dinliyoruz
 class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
-  bool _isWaitingForPayment = false; // Ödeme sürecinde miyiz kontrolü
+  bool _isWaitingForPayment = false;
+  int? lastOrderId; // Ödeme sürecinde miyiz kontrolü
 
   @override
   void initState() {
@@ -30,12 +31,18 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
   // 2. Uygulama durum değişikliğini yakalayan fonksiyon
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Eğer uygulama ön plana geldiyse (resumed) ve bir ödeme bekliyorsak
-    if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
+void didChangeAppLifecycleState(AppLifecycleState state) async {
+  // Uygulama ön plana geldiğinde ve bir ödeme bekliyorsak
+  if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
+    
+    // 1. Backend'e ödeme durumunu sor
+    final statusResult = await ApiService.getOrderStatus(lastOrderId); 
+
+    if (statusResult['status'] == 'SUCCESS') {
+      // ✅ SADECE ÖDEME BAŞARILIYSA MESAJ GÖSTER VE SEPETİ SİL
       setState(() {
-        cartBooks.clear(); // Sepeti şimdi temizle
-        _isWaitingForPayment = false; 
+        cartBooks.clear(); 
+        _isWaitingForPayment = false;
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -44,8 +51,18 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
           backgroundColor: Colors.green,
         ),
       );
+    } else {
+      // ❌ ÖDEME BAŞARISIZSA VEYA İPTAL EDİLDİYSE
+      // Hiçbir mesaj göstermiyoruz, sadece bekleme modunu kapatıyoruz
+      setState(() {
+        _isWaitingForPayment = false; 
+      });
+      
+      // Not: Eğer kullanıcıya "Ödeme olmadı" demek istersen buraya SnackBar ekleyebilirsin.
+      // Ama senin isteğin üzerine burayı boş (sessiz) bırakıyoruz.
     }
   }
+}
 
   double _calculateTotal() {
     double total = 0;

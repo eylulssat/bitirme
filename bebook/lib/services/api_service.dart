@@ -48,6 +48,22 @@ class ApiService {
     }
   }
 
+  // 🔍 Sipariş Durumunu Sorgula
+  static Future<Map<String, dynamic>> getOrderStatus(int? orderId) async {
+    if (orderId == null) return {'status': 'FAILURE'};
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/order-status/$orderId'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        return {'status': 'FAILURE'};
+      }
+    } catch (e) {
+      debugPrint("Sorgulama Hatası: $e");
+      return {'status': 'ERROR'};
+    }
+  }
+
   // ✉️ İletişim Formu
   static Future<bool> sendContactMessage(String fullName, String email, String message) async {
     try {
@@ -160,7 +176,7 @@ class ApiService {
     }
   }
 
-  // 🛒 Toplu Ödeme İşlemi (Hata buradaydı, içeri aldık)
+  // 🛒 Toplu Ödeme İşlemi
   static Future<Map<String, dynamic>> makeBulkPayment({
     required int userId,
     required List<int> bookIds,
@@ -187,4 +203,4 @@ class ApiService {
       return {"status": "error", "message": "Bağlantı hatası oluştu."};
     }
   }
-} // Sınıfın bittiği yer burası olmalı!
+} // Sınıfın bittiği yer artık BURASI.
