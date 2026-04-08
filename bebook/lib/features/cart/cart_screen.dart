@@ -12,57 +12,51 @@ class CartScreen extends StatefulWidget {
   State<CartScreen> createState() => _CartScreenState();
 }
 
-// 1. WidgetsBindingObserver ekleyerek uygulama hareketlerini dinliyoruz
 class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   bool _isWaitingForPayment = false;
-  int? lastOrderId; // Ödeme sürecinde miyiz kontrolü
+  bool _isAgreedToTerms = false; // Sözleşme onayı için yeni değişken
+  int? lastOrderId; 
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // Gözlemciyi başlat
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // Gözlemciyi temizle
+    _nameController.dispose();
+    _addressController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // 2. Uygulama durum değişikliğini yakalayan fonksiyon
   @override
-void didChangeAppLifecycleState(AppLifecycleState state) async {
-  // Uygulama ön plana geldiğinde ve bir ödeme bekliyorsak
-  if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
-    
-    // 1. Backend'e ödeme durumunu sor
-    final statusResult = await ApiService.getOrderStatus(lastOrderId); 
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
+      final statusResult = await ApiService.getOrderStatus(lastOrderId); 
 
-    if (statusResult['status'] == 'SUCCESS') {
-      // ✅ SADECE ÖDEME BAŞARILIYSA MESAJ GÖSTER VE SEPETİ SİL
-      setState(() {
-        cartBooks.clear(); 
-        _isWaitingForPayment = false;
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Sipariş işleminiz tamamlandı."),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      // ❌ ÖDEME BAŞARISIZSA VEYA İPTAL EDİLDİYSE
-      // Hiçbir mesaj göstermiyoruz, sadece bekleme modunu kapatıyoruz
-      setState(() {
-        _isWaitingForPayment = false; 
-      });
-      
-      // Not: Eğer kullanıcıya "Ödeme olmadı" demek istersen buraya SnackBar ekleyebilirsin.
-      // Ama senin isteğin üzerine burayı boş (sessiz) bırakıyoruz.
+      if (statusResult['status'] == 'SUCCESS') {
+        setState(() {
+          cartBooks.clear(); 
+          _isWaitingForPayment = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Sipariş işleminiz tamamlandı."),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        setState(() {
+          _isWaitingForPayment = false; 
+        });
+      }
     }
   }
-}
 
   double _calculateTotal() {
     double total = 0;
@@ -72,9 +66,113 @@ void didChangeAppLifecycleState(AppLifecycleState state) async {
     return total;
   }
 
+  // Mesafeli Satış Sözleşmesi İçeriği
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Mesafeli Satış Sözleşmesi"),
+        content: const SingleChildScrollView(
+          child: Text(
+            "1. TARAFLAR: İşbu sözleşme BEBOOK üzerinden alışveriş yapan kullanıcı ile satıcı arasındadır.\n\n"
+            "2. KONU: Alıcının satıcıya ait web sitesi üzerinden elektronik ortamda siparişini verdiği ürünün satışı ve teslimi ile ilgili hak ve yükümlülükleri kapsar.\n\n"
+            "3. TESLİMAT: Ürün, alıcının belirttiği adrese güvenli bir şekilde gönderilecektir.\n\n"
+            "4. CAYMA HAKKI: Dijital içeriklerde ve özel basımlarda cayma hakkı sınırlıdır.\n\n"
+            "Bu metin BEBOOK projesi kapsamında test amaçlı oluşturulmuştur."
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Anladım")),
+        ],
+      ),
+    );
+  }
+
   void _completePayment(Color primaryColor) async {
     if (cartBooks.isEmpty) return;
 
+    // Diyalog her açıldığında onay kutusunu sıfırlayalım
+    _isAgreedToTerms = false; 
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder( // Checkbox'ın anlık güncellenmesi için gerekli
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("Teslimat Bilgileri", style: TextStyle(fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: "Ad Soyad",
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _addressController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: "Teslimat Adresi",
+                      prefixIcon: Icon(Icons.location_on),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _isAgreedToTerms,
+                        activeColor: primaryColor,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            _isAgreedToTerms = value!;
+                          });
+                        },
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _showTermsDialog,
+                          child: const Text(
+                            "Mesafeli Satış Sözleşmesi'ni okudum, onaylıyorum.",
+                            style: TextStyle(fontSize: 12, decoration: TextDecoration.underline),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isAgreedToTerms ? primaryColor : Colors.grey,
+                ),
+                onPressed: _isAgreedToTerms ? () {
+                  if (_nameController.text.isNotEmpty && _addressController.text.isNotEmpty) {
+                    Navigator.pop(context);
+                    _processPaymentRequest(primaryColor);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Lütfen tüm alanları doldurun.")),
+                    );
+                  }
+                } : null, // Onay kutusu seçili değilse buton inaktif olur
+                child: const Text("Ödemeye Geç", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _processPaymentRequest(Color primaryColor) async {
     List<int> ids = cartBooks.map((b) => int.parse(b.bookId.toString())).toList();
     double total = _calculateTotal();
 
@@ -89,23 +187,22 @@ void didChangeAppLifecycleState(AppLifecycleState state) async {
         userId: 4,
         bookIds: ids,
         totalPrice: total,
+        // Backend güncellenince buraya:
+        // fullName: _nameController.text,
+        // address: _addressController.text,
       );
 
       if (!mounted) return;
       Navigator.pop(context);
 
       if (result['status'] == 'success' || result['status'] == 'None') { 
+        lastOrderId = result['orderId'];
         String? paymentUrl = result['paymentPageUrl'];
 
         if (paymentUrl != null && paymentUrl.isNotEmpty) {
           final Uri url = Uri.parse(paymentUrl);
-          
-          // DÜZENLEME: Burada temizlemiyoruz, sadece beklediğimizi işaretliyoruz
           _isWaitingForPayment = true; 
-          
           await launchUrl(url, mode: LaunchMode.externalApplication);
-          
-          // Buradan setState(...) kaldırıldı çünkü yukarıdaki didChangeAppLifecycleState halledecek.
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
