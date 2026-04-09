@@ -129,19 +129,46 @@ def scan_isbn():
             if h1_alt:
                 title = h1_alt.text.strip()
 
-        # 2. Yazar ve Yayınevini Çekme (Yeni attığın HTML koduna göre)
-        authors_wrapper = soup.find("div", class_="authors-wrapper")
+        # 2. Yazar ve Yayınevini Çekme (Güncel HTML yapısına göre 🎯)
         
+      # --- YAZAR ---
+        author = "Kolektif" # Bulamazsa varsayılan olarak bu kalacak
+        
+        # 1. Aşama: authors-wrapper içindeki yazar(lar)ı bulma (Birden fazla yazar varsa virgülle ayırır)
+        authors_wrapper = soup.find("div", class_="authors-wrapper")
         if authors_wrapper:
-            # Yazar: <h2 class="author"> içindeki <a> etiketi
-            h2_author = authors_wrapper.find("h2", class_="author")
-            if h2_author and h2_author.find("a"):
-                author = h2_author.find("a").text.strip()
+            author_tag = authors_wrapper.find("h2", class_="author")
+            if author_tag:
+                yazar_linkleri = author_tag.find_all("a")
+                if yazar_linkleri:
+                    author = ", ".join([a.text.strip() for a in yazar_linkleri])
+
+        # 2. Aşama (B Planı): Eğer yukarıdaki yapı yoksa, sitenin herhangi bir yerinde linkinde "/yazar/" geçen etiketi bul
+        if author == "Kolektif":
+            yazar_link = soup.find("a", href=lambda h: h and "/yazar/" in h.lower())
+            if yazar_link:
+                author = yazar_link.text.strip()
                 
-            # Yayınevi: <div id="publisherName"> içindeki <a> etiketi
-            publisher_div = authors_wrapper.find("div", id="publisherName")
-            if publisher_div and publisher_div.find("a"):
-                publisher = publisher_div.find("a").text.strip()
+        # 3. Aşama (C Planı): Özellikler tablosunun içinde "Yazar:" yazısını arayıp yanındaki değeri alma
+        if author == "Kolektif":
+            yazar_etiketi = soup.find("strong", string=lambda t: t and "Yazar:" in t)
+            if yazar_etiketi:
+                yazar_span = yazar_etiketi.find_next_sibling("span")
+                if yazar_span:
+                    author = yazar_span.text.strip()
+
+        # --- YAYINEVİ ---
+        # 1. Aşama: Attığın fotoğraftaki yapı (id="publisherName" içindeki 'a' etiketi)
+        publisher_div = soup.find("div", id="publisherName")
+        if publisher_div and publisher_div.find("a"):
+            publisher = publisher_div.find("a").text.strip()
+            
+        # 2. Aşama (B Planı): Eğer yukarıdaki div yoksa, sitenin herhangi bir yerinde 
+        # linki "/yayinevi/" ile başlayan etiketi bul (Fotoğrafta a href="..." içinde bu net görünüyor)
+        if not publisher:
+            yayinevi_link = soup.find("a", href=lambda h: h and "/yayinevi/" in h.lower())
+            if yayinevi_link:
+                publisher = yayinevi_link.text.strip()
 
         if title:
             print(f"🎉 D&R bulundu: {title} | Yazar: {author} | Yayınevi: {publisher}")

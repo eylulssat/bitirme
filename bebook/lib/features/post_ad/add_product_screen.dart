@@ -106,7 +106,7 @@ Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
   try {
     var request = http.MultipartRequest(
       "POST",
-      Uri.parse("http://192.168.1.5:8001/scan"),
+      Uri.parse("http://192.168.1.11:8001/scan"),
     );
 
     request.files.add(
@@ -126,6 +126,8 @@ Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
       setState(() {
         _nameController.text = data["title"] ?? "";
         _authorController.text = data["author"] ?? "";
+        // İŞTE EKLENMESİ GEREKEN SATIR BURASI:
+        _publisherController.text = data["publisher"] ?? ""; 
       });
     }
   } catch (e) {
