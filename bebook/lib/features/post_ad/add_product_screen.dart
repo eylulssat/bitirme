@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:bebook/services/api_service.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -22,6 +25,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _mailController = TextEditingController();
   bool isUserLoggedIn = true;
+  bool _isLoading = false;
 
   // --- FOTOĞRAF SEÇME VE SEÇENEKLERİ GÖSTERME ---
   void _showPickOptions() {
@@ -79,7 +83,57 @@ class _AddProductScreenState extends State<AddProductScreen> {
       print("Hata oluştu: $e");
     }
   }
+  Future<void> pickImageAndScan() async {
+  try {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 50,
+      maxWidth: 1000,
+    );
 
+    if (pickedFile != null) {
+      Uint8List imageBytes = await pickedFile.readAsBytes();
+      await fetchBookData(imageBytes, pickedFile.name);
+    }
+  } catch (e) {
+    print("Hata: $e");
+  }
+}
+
+Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
+  setState(() => _isLoading = true);
+
+  try {
+    var request = http.MultipartRequest(
+      "POST",
+      Uri.parse("http://192.168.1.5:8001/scan"),
+    );
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        "image",
+        imageBytes,
+        filename: fileName,
+      ),
+    );
+
+    var response = await request.send();
+    var responseData = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final data = json.decode(responseData);
+
+      setState(() {
+        _nameController.text = data["title"] ?? "";
+        _authorController.text = data["author"] ?? "";
+      });
+    }
+  } catch (e) {
+    print("Bağlantı hatası: $e");
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -264,33 +318,31 @@ class _AddProductScreenState extends State<AddProductScreen> {
   );
 }
   
-
-  Widget _buildAIButton() {
-    return InkWell(
-      onTap: () {
-      if (!isUserLoggedIn) {
-        showLoginAlert(context);
-      } else {
-        print("Barkod tarama başlatıldı");
-      }
-    },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
-          borderRadius: BorderRadius.circular(20),
+Widget _buildAIButton() {
+  return InkWell(
+    onTap: _isLoading ? null : pickImageAndScan,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)],
         ),
-        child: const Column(
-          children: [
-            Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
-            SizedBox(height: 15),
-            Text("ISBN Barkodunu Tara", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
+        borderRadius: BorderRadius.circular(20),
       ),
-    );
-  }
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : const Column(
+              children: [
+                Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
+                SizedBox(height: 15),
+                Text("ISBN Barkodunu Tara",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
+    ),
+  );
+}
 
   Widget _buildInput({required String label, required IconData icon, bool isNumber = false, TextEditingController? controller}) {
   return TextField(
