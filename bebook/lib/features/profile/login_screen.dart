@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; //
-import 'dart:convert'; //
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,6 +13,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isObscure = true;
+  bool _isLoading = false; // Giriş yaparken butonu pasif yapmak için ekledik
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
 
@@ -32,6 +33,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
+    // Android Emulator için: 10.0.2.2, Gerçek cihaz/Web için kendi IP'n
+    const String apiUrl = "http://192.168.1.29:8000/login"; 
+
+    setState(() => _isLoading = true);
     const String apiUrl = "http://192.168.67.158:8000/login"; // Web için localhost
 
     try {
@@ -39,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse(apiUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "email": _emailController.text,
+          "email": _emailController.text.trim(),
           "password": _passwordController.text,
         }),
       );
@@ -48,17 +53,22 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         
         if (mounted) {
+          // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz
           Navigator.pop(context, {
+            "user_id": data['user_id'], // Bu çok önemli!
             "user_email": data['user_email'],
             "university": data['university'],
             "department": data['department'],
           });
         }
       } else {
-        _showErrorSnackBar("E-posta veya şifre hatalı!");
+        final errorData = jsonDecode(response.body);
+        _showErrorSnackBar(errorData['detail'] ?? "E-posta veya şifre hatalı!");
       }
     } catch (e) {
-      _showErrorSnackBar("Bağlantı hatası: Sunucu açık mı?");
+      _showErrorSnackBar("Bağlantı hatası: Sunucuya erişilemiyor.");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -93,6 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 30),
                   TextFormField(
                     controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     validator: (v) => (v == null || v.isEmpty) ? "E-posta giriniz" : null,
                     decoration: InputDecoration(
                       labelText: "E-posta", 
@@ -136,16 +147,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState!.validate()) {
-                          _handleLogin(); // API Fonksiyonunu çağırıyoruz
-                        }
-                      },
+                      onPressed: _isLoading 
+                        ? null // İstek devam ederken butonu pasif yap
+                        : () {
+                            if (_formKey.currentState!.validate()) {
+                              _handleLogin();
+                            }
+                          },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor, 
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: _isLoading 
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

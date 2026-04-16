@@ -33,9 +33,11 @@ dependencies:
   google_fonts: ^6.1.0  
   google_nav_bar: ^5.0.6 
   image_picker: ^1.1.2
+  http: ^1.2.1          # tek ve güncel versiyon
   http: ^1.6.0          # Senin dosyanla güncellendi
   webview_flutter: ^4.2.1
   url_launcher: ^6.2.1
+  webview_flutter: ^4.4.2
 
 dev_dependencies:
   flutter_test:

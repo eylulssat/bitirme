@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'features/main_wrapper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
+import 'features/payment/payment_web_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -24,6 +24,7 @@ class MyApp extends StatelessWidget {
 
 // ------------------- API SERVİSİ -------------------
 class ApiService {
+  static const String baseUrl = "http://192.168.1.29:8000"; 
   // Yeni IP adresin: 192.168.67.99
   final String baseUrl = "http://192.168.67.158:8000"; 
 
@@ -40,62 +41,124 @@ class ApiService {
           "book_id": bookId,
           "price": price,
         }),
-      ); // 10 saniye bekleme süresi
+      );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        // Sunucuya ulaştık ama sunucu hata (404, 500 vb.) döndürdü
-        throw Exception("Sunucu Hatası: ${response.statusCode} - ${response.body}");
+        throw Exception("Sunucu Hatası: ${response.statusCode}");
       }
     } catch (e) {
-      // Bağlantı hatası (IP yanlışlığı, kapalı server vb.) burada fırlatılır
       rethrow;
     }
   }
 }
 
 // ------------------- ÖDEME AKIŞI -------------------
-void makePayment(
-    BuildContext context, int userId, int bookId, double price) async {
+void makePayment(BuildContext context, int userId, int bookId, double price) async {
   final api = ApiService();
 
   try {
-    debugPrint("--- İstek Gönderiliyor: $userId, $bookId, $price ---");
-    
+    debugPrint("--- Ödeme Başlatılıyor ---");
     final paymentResponse = await api.createPayment(userId, bookId, price);
     
-    debugPrint("--- Sunucu Yanıtı: $paymentResponse ---");
+    // Terminalden gelen veriyi kontrol etmek için:
+    debugPrint("Backend Yanıtı: $paymentResponse");
+    
+    // Iyzico verisi bazen doğrudan gelmez, kontrolü esnek tutuyoruz
+    String? checkoutUrl = paymentResponse['paymentPageUrl'];
+    String? orderId = paymentResponse['conversationId']?.toString();
 
-    if (paymentResponse.containsKey('paymentPageUrl')) {
-      final checkoutUrl = paymentResponse['paymentPageUrl'];
-      
-      final Uri url = Uri.parse(checkoutUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(
-          url,
-          mode: LaunchMode.externalApplication,
+    // Eğer URL varsa WebView'ı aç
+    if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
+      if (context.mounted) {
+        debugPrint("WebView Açılıyor: $checkoutUrl");
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaymentWebView(url: checkoutUrl),
+          ),
         );
-      } else {
-        throw "Ödeme sayfası açılamadı (URL geçersiz: $checkoutUrl)";
+      }
+
+      // WebView kapandıktan sonra (Geri tuşu veya ödeme bitişi)
+      if (!context.mounted) return;
+
+      // 2. ADIM: Polling (Durum Sorgulama)
+      bool isSuccess = false;
+      if (orderId != null) {
+        for (int i = 0; i < 20; i++) {
+          await Future.delayed(const Duration(seconds: 2)); 
+
+          final statusUrl = "${ApiService.baseUrl}/order-status/$orderId";
+          try {
+            final statusResponse = await http.get(Uri.parse(statusUrl));
+            if (statusResponse.statusCode == 200) {
+              final statusData = jsonDecode(statusResponse.body);
+              String currentStatus = statusData['status']?.toString().toUpperCase() ?? "";
+
+              if (currentStatus == "SUCCESS") {
+                isSuccess = true;
+                break;
+              } else if (currentStatus == "FAILED") {
+                break;
+              }
+            }
+          } catch (e) {
+            debugPrint("Sorgu hatası: $e");
+          }
+        }
+      }
+
+      // 3. ADIM: Sonuç Gösterimi
+      if (context.mounted) {
+        if (isSuccess) {
+          _showResultDialog(context, "Başarılı", "Ödemeniz onaylandı!", Colors.green, true);
+        } else {
+          _showResultDialog(context, "Hata", "Ödeme tamamlanamadı veya iptal edildi.", Colors.red, false);
+        }
       }
     } else {
-      throw "Sunucu 'paymentPageUrl' döndürmedi. Yanıt: $paymentResponse";
+      debugPrint("HATA: paymentPageUrl bulunamadı!");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Ödeme linki oluşturulamadı."), backgroundColor: Colors.orange)
+        );
+      }
     }
-    
-  } catch (e, stacktrace) {
-    // BURASI TERMİNALDE DETAYLI HATA GÖRMENİ SAĞLAR
-    debugPrint("========== HATA DETAYI ==========");
-    debugPrint("Hata: $e");
-    debugPrint("Stacktrace: $stacktrace");
-    debugPrint("================================");
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Ödeme Hatası: $e"),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 5),
-      ),
-    );
+  } catch (e) {
+    debugPrint("Akış Hatası: $e");
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red)
+      );
+    }
   }
+}
+
+void _showResultDialog(BuildContext context, String title, String msg, Color color, bool isSuccess) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      content: Text(msg),
+      actions: [
+        TextButton(
+          onPressed: () {
+            if (isSuccess) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const MainWrapper()),
+                (route) => false,
+              );
+            } else {
+              Navigator.pop(context);
+            }
+          },
+          child: const Text("Tamam"),
+        ),
+      ],
+    ),
+  );
 }
