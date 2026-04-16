@@ -37,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     const String apiUrl = "http://192.168.1.29:8000/login"; 
 
     setState(() => _isLoading = true);
+    const String apiUrl = "http://192.168.67.158:8000/login"; // Web için localhost
 
     try {
       final response = await http.post(

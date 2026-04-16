@@ -43,6 +43,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _handleSignup() async {
 const String apiUrl = "http://192.168.1.29:8000/signup"; // Web'de çalıştığın için localhost kullanmalısın.
+const String apiUrl = "http://192.168.67.158:8000/signup"; // Web'de çalıştığın için localhost kullanmalısın.
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
