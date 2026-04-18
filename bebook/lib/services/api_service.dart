@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ApiService {
   // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
@@ -100,20 +101,18 @@ class ApiService {
     }
   }
 
-  // --- Kitap İlanı Yayınla (RESİM DESTEKLİ - Multipart) ---
+  // --- Kitap İlanı Yayınla (RESİM DESTEKLİ - Multipart, Web+Mobile uyumlu) ---
   static Future<bool> uploadBook({
-    required int userId,
     required String title,
     required String author,
     required String category,
     required double price,
     required String description,
     required String sellerEmail,
-    String imagePath = "",
+    XFile? imageFile,
   }) async {
     try {
       var request = http.MultipartRequest('POST', Uri.parse("$baseUrl/books"));
-      request.fields['user_id'] = userId.toString();
       request.fields['title'] = title;
       request.fields['author'] = author;
       request.fields['category'] = category;
@@ -121,11 +120,11 @@ class ApiService {
       request.fields['description'] = description;
       request.fields['seller_email'] = sellerEmail;
 
-      if (imagePath.isNotEmpty) {
-        File imageFile = File(imagePath);
-        if (await imageFile.exists()) {
-          request.files.add(await http.MultipartFile.fromPath('file', imagePath));
-        }
+      if (imageFile != null) {
+        // Web ve mobil için XFile.readAsBytes() kullan
+        final bytes = await imageFile.readAsBytes();
+        final fileName = imageFile.name.isNotEmpty ? imageFile.name : 'image.jpg';
+        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
       }
 
       var streamedResponse = await request.send();
@@ -142,14 +141,44 @@ class ApiService {
     return response.statusCode == 200 ? jsonDecode(response.body) : [];
   }
 
-  static Future<void> toggleFavorite(int userId, int bookId) async {
+  static Future<Map<String, dynamic>?> toggleFavorite(int userId, int bookId) async {
     try {
-      await http.post(
-        Uri.parse("$baseUrl/favorites"),
+      final response = await http.post(
+        Uri.parse("$baseUrl/favorites/toggle"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"user_id": userId, "book_id": bookId}),
       );
-    } catch (e) { debugPrint("Favori hatası: $e"); }
+      return response.statusCode == 200 ? jsonDecode(response.body) : null;
+    } catch (e) { 
+      debugPrint("Favori hatası: $e"); 
+      return null;
+    }
+  }
+
+  static Future<List<dynamic>> getFavorites(int userId) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/favorites/$userId'));
+      return response.statusCode == 200 ? jsonDecode(response.body) : [];
+    } catch (e) {
+      debugPrint("Favoriler yükleme hatası: $e");
+      return [];
+    }
+  }
+
+  static Future<bool> checkFavorite(int userId, int bookId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/favorites/check/$userId/$bookId')
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['is_favorite'] ?? false;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Favori kontrol hatası: $e");
+      return false;
+    }
   }
 
   static Future<bool> sendContactMessage(String fullName, String email, String message) async {

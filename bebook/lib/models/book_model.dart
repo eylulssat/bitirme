@@ -39,7 +39,7 @@ class Book {
   // Gelen JSON'ı Flutter nesnesine dönüştüren fonksiyon
   factory Book.fromJson(Map<String, dynamic> json) {
     return Book(
-      id: json['id'] ?? 0,
+      id: json['book_id'] ?? json['id'] ?? 0,
       title: json['title'] ?? 'İsimsiz Kitap',
       author: json['author'] ?? 'Bilinmeyen Yazar',
       category: json['category'] ?? '',

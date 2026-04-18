@@ -12,44 +12,14 @@ import shutil
 import uuid
 from typing import List, Optional
 
-# 1. ÖNCE APP NESNESİNİ OLUŞTUR
+# ============================================
+# 1. APP OLUŞTURMA
+# ============================================
 app = FastAPI()
 
-# 2. PYDANTIC MODELLERİ
-class BulkPaymentRequest(BaseModel):
-    user_id: int
-    book_ids: List[int]
-    total_price: float
-
-
-# --- CORS AYARLARI ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- VERİTABANI BAĞLANTISI ---
-def get_db_connection():
-    return psycopg2.connect(
-        host="localhost",
-        database="bebook",
-        user="postgres",
-        password="senem2003", 
-        port="5432"
-    )
-
-# --- IYZICO AYARLARI ---
-IYZICO_OPTIONS = {
-    'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
-    'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
-    'base_url': 'sandbox-api.iyzipay.com'
-}
-
-# --- VERİ MODELLERİ ---
-
+# ============================================
+# 2. PYDANTIC MODELLERİ (Tüm modeller burada)
+# ============================================
 class UserSignup(BaseModel):
     email: str
     password: str
@@ -60,14 +30,14 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-class BookCreate(BaseModel):  # YENİ EKLENDİ/GÜNCELLENDİ
+class BookCreate(BaseModel):
     title: str
     author: str
     category: str
     price: float
     description: str
     seller_email: str
-    publisher: Optional[str] = "" # Yayınevi alanı
+    publisher: Optional[str] = ""
     image_path: Optional[str] = ""
 
 class CreatePayment(BaseModel):
@@ -75,22 +45,30 @@ class CreatePayment(BaseModel):
     book_id: int
     price: float
 
+class BulkPaymentRequest(BaseModel):
+    user_id: int
+    book_ids: List[int]
+    total_price: float
+
 class UpdateBook(BaseModel):
     book_id: int
     user_id: int
     title: str
     price: float
-    description: str    
+    description: str
 
 class ContactRequest(BaseModel):
     full_name: str
     email: str
     message: str
 
-    description: str
+class FavoriteToggle(BaseModel):
+    user_id: int
+    book_id: int
 
-
-# --- 🖼️ STATİK DOSYA VE CORS AYARLARI ---
+# ============================================
+# 3. UPLOAD DİZİNİ VE STATİK DOSYALAR
+# ============================================
 UPLOAD_DIR = "uploads" 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
@@ -98,6 +76,9 @@ if not os.path.exists(UPLOAD_DIR):
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 BASE_URL = "http://192.168.1.30:8000"  # LOKAL IP KORUNDU 
 
+# ============================================
+# 4. CORS AYARLARI (Tek sefer)
+# ============================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,103 +87,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- VERİTABANI BAĞLANTISI ---
+# ============================================
+# 5. VERİTABANI BAĞLANTISI (Tek fonksiyon)
+# ============================================
 def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         database="bebook",
         user="postgres",
-        password="senem2003",
+        password="senem2003",  # LOKAL ŞİFRE KORUNDU
         port="5432"
     )
 
-# --- IYZICO AYARLARI ---
+# ============================================
+# 6. IYZICO AYARLARI (Tek sefer)
+# ============================================
 IYZICO_OPTIONS = {
     'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
     'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
     'base_url': 'sandbox-api.iyzipay.com'
 }
 
-# --- 🛒 YENİ EKLENEN: TOPLU ÖDEME ROTASI ---
-@app.post("/bulk-payment")
-async def bulk_payment(request: BulkPaymentRequest):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        
-        # HATA ALAN KISIM BURASIYDI: 
-        # Ana tabloya (orders) kayıt atarken sepetteki ilk kitabın ID'sini veriyoruz 
-        # ki 'NOT NULL' kısıtlaması bozulmasın.
-        first_book_id = request.book_ids[0] if request.book_ids else None
+# ============================================
+# 7. ENDPOINTS
+# ============================================
 
-        cur.execute(
-            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
-            (request.user_id, first_book_id, request.total_price, "PENDING")
-        )
-        order_id = cur.fetchone()[0]
-        conn.commit()
-
-        # ... (İyzipay sepet hazırlama kısımları aynı kalıyor) ...
-        
-        # İyzipay basket_items kısmında tüm kitapları tek tek eklemeye devam et
-        basket_items = []
-        for b_id in request.book_ids:
-            item = {
-                'id': str(b_id),
-                'name': f'Kitap ID: {b_id}',
-                'category1': 'Egitim',
-                'itemType': 'PHYSICAL',
-                'price': str(request.total_price / len(request.book_ids))
-            }
-            basket_items.append(item)
-
-        # İyzipay isteğini gönder...
-
-        # 3. İyzipay Form Başlatma İsteği
-        iyzico_request = {
-            'locale': 'tr',
-            'conversationId': str(order_id),
-            'price': str(request.total_price),
-            'paidPrice': str(request.total_price),
-            'currency': 'TRY',
-            'basketId': str(order_id),
-            'paymentGroup': 'PRODUCT',
-            'callbackUrl': f'{BASE_URL}/payment-callback', # Ödeme bitince döneceği adres
-            'buyer': {
-                'id': str(request.user_id),
-                'name': 'Merve',
-                'surname': 'Bebook',
-                'gsmNumber': '+905350000000',
-                'email': 'test@email.com',
-                'identityNumber': '11111111110',
-                'city': 'Zonguldak',
-                'country': 'Turkey',
-                'zipCode': '67100',
-                'registrationAddress': 'ZBEU Kampusu'
-            },
-            'shippingAddress': {
-                'contactName': 'Merve Bebook', 'city': 'Zonguldak', 'country': 'Turkey', 
-                'address': 'Incivez Mah.', 'zipCode': '67100'
-            },
-            'billingAddress': {
-                'contactName': 'Merve Bebook', 'city': 'Zonguldak', 'country': 'Turkey', 
-                'address': 'Incivez Mah.', 'zipCode': '67100'
-            },
-            'basketItems': basket_items
-        }
-
-        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(iyzico_request, IYZICO_OPTIONS)
-        # İyzipay'den gelen veriyi JSON olarak Flutter'a gönderiyoruz
-        return json.loads(checkout_form_initialize.read().decode('utf-8'))
-
-    except Exception as e:
-        print(f"İyzipay Hatası: {e}")
-        return {"status": "failure", "errorMessage": str(e)}
-    finally:
-        conn.close()
-
-# --- DİĞER ENDPOINTS (Geri Kalanlar Aynı) ---
-
+# --- KULLANICI KAYIT ---
 @app.post("/signup")
 async def signup(user: UserSignup):
     conn = get_db_connection()
@@ -225,19 +135,14 @@ async def signup(user: UserSignup):
     finally:
         conn.close()
 
-# ... (Buradan sonraki /login, /books vb. tüm kodlarını altına yapıştırabilirsin)
-
-
-
-        
-
+# --- KULLANICI GİRİŞ ---
 @app.post("/login")
 async def login(user: UserLogin):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute("SELECT user_id, password_hash, university, department FROM public.users WHERE email = %s", (user.email,))
-        result = result = cur.fetchone()
+        result = cur.fetchone()
 
         if not result:
             raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
@@ -256,72 +161,70 @@ async def login(user: UserLogin):
     finally:
         conn.close()
 
+# --- TÜM KİTAPLARI GETİR (Ana Sayfa) ---
 @app.get("/books")
 async def get_all_books():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT book_id, user_id, title, author, category, price, description, image_path FROM public.books")
+        query = """
+            SELECT 
+                b.id as book_id, u.user_id, b.title, b.author, b.category, b.price, 
+                b.description, b.image_path, b.seller_email, b.publisher,
+                u.email, u.university, u.department
+            FROM public.books b
+            LEFT JOIN public.users u ON b.seller_email = u.email
+        """
+        cur.execute(query)
         books = cur.fetchall()
         
         result = []
         for b in books:
-            # Resim ismini tam URL'e çeviriyoruz
-            image_url = f"{BASE_URL}/uploads/{b[7]}" if b[7] else None
+            # Resim yolunu tam URL'e çeviriyoruz
+            image_path = b[7]
+            if image_path:
+                # Eğer zaten tam URL ise olduğu gibi kullan
+                if image_path.startswith('http'):
+                    image_url = image_path
+                # Eğer /uploads/ ile başlıyorsa baseUrl ekle
+                elif image_path.startswith('/uploads/'):
+                    image_url = f"{BASE_URL}{image_path}"
+                # Sadece dosya adı ise /uploads/ ekle
+                else:
+                    image_url = f"{BASE_URL}/uploads/{image_path}"
+            else:
+                image_url = None
+                
             result.append({
                 "book_id": b[0],
                 "user_id": b[1],
                 "title": b[2],
                 "author": b[3],
                 "category": b[4],
-                "price": b[5],
+                "price": float(b[5]),
                 "description": b[6],
-                "image_path": image_url
+                "image_path": image_url,
+                "seller_email": b[8],
+                "publisher": b[9],
+                "email": b[10],
+                "university": b[11],
+                "department": b[12]
             })
         return result
     finally:
         conn.close()
 
-@app.get("/my-books/{user_id}")
-async def get_my_books(user_id: int):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        # SORGUDAN SONRA 'author' alanını ekledik:
-        cur.execute("""
-            SELECT book_id, user_id, title, author, price, description, image_path
-            FROM books
-            WHERE user_id = %s
-        """, (user_id,))
-        books = cur.fetchall()
-
-        result = []
-        for b in books:
-            image_url = f"{BASE_URL}/uploads/{b[6]}" if b[6] else None
-            result.append({
-                "book_id": b[0],
-                "user_id": b[1],
-                "title": b[2],
-                "author": b[3], # Artık yazar bilgisi listede
-                "price": b[4],
-                "description": b[5],
-                "image_path": image_url
-            })
-        return result
-    finally:
-        conn.close()
-
-# --- 🔥 GÜNCELLENEN: RESİM YÜKLEMELİ KİTAP EKLEME ---
+# --- YENİ KİTAP EKLEME (Resim ile) ---
 @app.post("/books")
 async def add_book(
-    user_id: int = Form(...),
     title: str = Form(...),
     author: str = Form(...),
     category: str = Form(...),
     price: float = Form(...),
     description: str = Form(...),
     seller_email: str = Form(...),
-    file: UploadFile = File(None) # Resim dosyası buradan gelir
+    publisher: str = Form(""),
+    file: UploadFile = File(None)
 ):
     conn = None
     image_name = None
@@ -341,9 +244,9 @@ async def add_book(
         cur = conn.cursor()
         cur.execute(
             """INSERT INTO public.books 
-            (user_id, title, author, category, price, description, seller_email, image_path) 
+            (title, author, category, price, description, seller_email, publisher, image_path) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (user_id, title, author, category, price, description, seller_email, image_name)
+            (title, author, category, price, description, seller_email, publisher, image_name)
         )
         conn.commit()
         cur.close()
@@ -355,86 +258,104 @@ async def add_book(
     finally:
         if conn: conn.close()
 
-
-# --- YENİ KİTAP İLANI YAYINLA ---
-@app.post("/books")
-async def upload_book(
-    title: str = Form(...),
-    author: str = Form(...),
-    category: str = Form(...),
-    publisher: str = Form(""),
-    price: float = Form(...),
-    description: str = Form(""),
-    seller_email: str = Form(...),
-    image: UploadFile = File(None)
-):
-    conn = get_db_connection()
-    try:
-        image_url = ""
-        # 1. Eğer resim gönderildiyse bunu kaydet
-        if image and image.filename:
-            file_ext = image.filename.split(".")[-1]
-            # Benzersiz dosya adı oluştur (timestamp + uuid)
-            file_name = f"{uuid.uuid4()}.{file_ext}"
-            
-            # UPLOAD_DIR sabitini kullan
-            file_path = os.path.join(UPLOAD_DIR, file_name)
-            
-            # Dosyayı kaydet
-            with open(file_path, "wb") as buffer:
-                buffer.write(await image.read())
-            
-            # 2. Veritabanına sadece dosya adını kaydet (IP değişikliğine karşı esnek)
-            # Frontend'de baseUrl ile birleştirilecek
-            image_url = f"/uploads/{file_name}"
-
-        cur = conn.cursor()
-        query = """
-            INSERT INTO public.books 
-            (title, author, category, publisher, price, description, seller_email, image_path) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cur.execute(query, (
-            title, author, category, publisher, price, description, seller_email, image_url
-        ))
-        conn.commit()
-        return {"status": "success", "message": "İlan başarıyla oluşturuldu!"}
-    except Exception as e:
-        if conn: conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        if conn: conn.close()
-# --- TÜM KİTAPLARI GETİR (Ana Sayfa) ---
-@app.get("/books")
-async def fetch_books():
+# --- KULLANICININ KİTAPLARINI GETİR ---
+@app.get("/my-books/{user_id}")
+async def get_my_books(user_id: int):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        # books tablosu (b) ile users tablosunu (u) e-posta üzerinden birleştiriyoruz
-        query = """
-            SELECT 
-                b.id, b.title, b.author, b.category, b.price, b.description, 
-                b.seller_email, b.image_path, b.is_sold, b.created_at, b.publisher,
-                u.user_id, u.email, u.university, u.department
-            FROM public.books b
-            LEFT JOIN public.users u ON b.seller_email = u.email
-            WHERE b.is_sold = FALSE
-        """
-        cur.execute(query)
+        # user_id'den email'i bulup, o email'e ait kitapları getir
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        user_result = cur.fetchone()
+        
+        if not user_result:
+            return []
+        
+        user_email = user_result[0]
+        
+        cur.execute("""
+            SELECT id as book_id, title, author, category, publisher, price, description, image_path
+            FROM books
+            WHERE seller_email = %s
+        """, (user_email,))
         books = cur.fetchall()
-        return [
-            {
-                "id": b[0], "title": b[1], "author": b[2], "category": b[3], 
-                "price": float(b[4]), "description": b[5], "seller_email": b[6], 
-                "image_path": b[7], "is_sold": b[8], "created_at": str(b[9]), "publisher": b[10],
-                "user_id": b[11], "email": b[12], "university": b[13], "department": b[14]
-            } for b in books
-        ]
+
+        result = []
+        for b in books:
+            image_path = b[7]
+            if image_path:
+                if image_path.startswith('http'):
+                    image_url = image_path
+                elif image_path.startswith('/uploads/'):
+                    image_url = f"{BASE_URL}{image_path}"
+                else:
+                    image_url = f"{BASE_URL}/uploads/{image_path}"
+            else:
+                image_url = None
+                
+            result.append({
+                "book_id": b[0],
+                "user_id": user_id,
+                "title": b[1],
+                "author": b[2],
+                "category": b[3],
+                "publisher": b[4],
+                "price": float(b[5]),
+                "description": b[6],
+                "image_path": image_url
+            })
+        return result
     finally:
         conn.close()
 
-# --- ÖDEME BAŞLATMA (CREATE PAYMENT) ---
+# --- KİTAP GÜNCELLEME ---
+@app.put("/update-book")
+async def update_book(book: UpdateBook):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # user_id'den email'i bul
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (book.user_id,))
+        user_result = cur.fetchone()
+        
+        if not user_result:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        
+        user_email = user_result[0]
+        
+        # Kitabı güncelle
+        cur.execute(
+            "UPDATE books SET title = %s, price = %s, description = %s WHERE id = %s AND seller_email = %s", 
+            (book.title, book.price, book.description, book.book_id, user_email)
+        )
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
 
+# --- KİTAP SİLME ---
+@app.delete("/delete-book/{book_id}/{user_id}")
+async def delete_book(book_id: int, user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # user_id'den email'i bul
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        user_result = cur.fetchone()
+        
+        if not user_result:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        
+        user_email = user_result[0]
+        
+        # Kitabı sil
+        cur.execute("DELETE FROM books WHERE id = %s AND seller_email = %s", (book_id, user_email))
+        conn.commit()
+        return {"status": "success"}
+    finally:
+        conn.close()
+
+# --- TEK KİTAP İÇİN ÖDEME BAŞLATMA ---
 @app.post("/create-payment")
 async def create_payment(payment: CreatePayment):
     conn = get_db_connection()
@@ -447,7 +368,6 @@ async def create_payment(payment: CreatePayment):
         order_id = cur.fetchone()[0]
         conn.commit()
 
-        # Ortak adres objesi (Hem fatura hem teslimat için kullanabiliriz)
         address_info = {
             'contactName': 'Merve Bebook',
             'city': 'Zonguldak',
@@ -464,7 +384,7 @@ async def create_payment(payment: CreatePayment):
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': f'{BASE_URL}/payment-callback',  # LOKAL IP KORUNDU
+            'callbackUrl': f'{BASE_URL}/payment-callback',
             'buyer': {
                 'id': str(payment.user_id),
                 'name': 'Eylul',
@@ -494,30 +414,104 @@ async def create_payment(payment: CreatePayment):
     finally:
         conn.close()
 
+# --- TOPLU ÖDEME (Sepet) ---
+@app.post("/bulk-payment")
+async def bulk_payment(request: BulkPaymentRequest):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # İlk kitabın ID'sini orders tablosuna kaydediyoruz
+        first_book_id = request.book_ids[0] if request.book_ids else None
+
+        cur.execute(
+            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
+            (request.user_id, first_book_id, request.total_price, "PENDING")
+        )
+        order_id = cur.fetchone()[0]
+        conn.commit()
+
+        # Sepetteki tüm kitapları basket_items'a ekliyoruz
+        basket_items = []
+        for b_id in request.book_ids:
+            item = {
+                'id': str(b_id),
+                'name': f'Kitap ID: {b_id}',
+                'category1': 'Egitim',
+                'itemType': 'PHYSICAL',
+                'price': str(request.total_price / len(request.book_ids))
+            }
+            basket_items.append(item)
+
+        iyzico_request = {
+            'locale': 'tr',
+            'conversationId': str(order_id),
+            'price': str(request.total_price),
+            'paidPrice': str(request.total_price),
+            'currency': 'TRY',
+            'basketId': str(order_id),
+            'paymentGroup': 'PRODUCT',
+            'callbackUrl': f'{BASE_URL}/payment-callback',
+            'buyer': {
+                'id': str(request.user_id),
+                'name': 'Merve',
+                'surname': 'Bebook',
+                'gsmNumber': '+905350000000',
+                'email': 'test@email.com',
+                'identityNumber': '11111111110',
+                'city': 'Zonguldak',
+                'country': 'Turkey',
+                'zipCode': '67100',
+                'registrationAddress': 'ZBEU Kampusu'
+            },
+            'shippingAddress': {
+                'contactName': 'Merve Bebook', 
+                'city': 'Zonguldak', 
+                'country': 'Turkey', 
+                'address': 'Incivez Mah.', 
+                'zipCode': '67100'
+            },
+            'billingAddress': {
+                'contactName': 'Merve Bebook', 
+                'city': 'Zonguldak', 
+                'country': 'Turkey', 
+                'address': 'Incivez Mah.', 
+                'zipCode': '67100'
+            },
+            'basketItems': basket_items
+        }
+
+        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(iyzico_request, IYZICO_OPTIONS)
+        return json.loads(checkout_form_initialize.read().decode('utf-8'))
+
+    except Exception as e:
+        print(f"İyzipay Hatası: {e}")
+        return {"status": "failure", "errorMessage": str(e)}
+    finally:
+        conn.close()
+
+# --- ÖDEME CALLBACK (Tek versiyon) ---
 @app.post("/payment-callback")
 async def payment_callback(request: Request):
     form_data = await request.form()
-    token = form_data.get('token') # Iyzico'dan gelen tek veri bu
+    token = form_data.get('token')
 
     if not token:
         return HTMLResponse(content="Geçersiz istek (Token yok)", status_code=400)
 
-    # 1. İyzipay'e bu token ile sonucun ne olduğunu soruyoruz
+    # İyzipay'e token ile sonucu sorguluyoruz
     iyzico_request = {'token': token}
     checkout_form_result = iyzipay.CheckoutForm().retrieve(iyzico_request, IYZICO_OPTIONS)
     
-    # Gelen yanıtı JSON'a çevirip kontrol edelim
     result = json.loads(checkout_form_result.read().decode('utf-8'))
     
-    # Debug için terminale detayları yazdıralım
     print("--- IYZICO SORGULAMA SONUCU ---")
     print(json.dumps(result, indent=2))
 
-    payment_status = result.get('paymentStatus') # 'SUCCESS' veya 'FAILURE' döner
-    order_id = result.get('conversationId')      # Veritabanındaki order_id
+    payment_status = result.get('paymentStatus')
+    order_id = result.get('conversationId')
 
     if payment_status == 'SUCCESS':
-        # 2. Veritabanını Güncelle
         try:
             conn = get_db_connection()
             cur = conn.cursor()
@@ -530,15 +524,13 @@ async def payment_callback(request: Request):
 
         status_text = "Ödeme Başarılı!"
         main_color = "#2ecc71"
-        description = "İşleminiz başarıyla tamamlandı. Diğer ilanları incelemek için ana sayfaya dönebilirsiniz.!"
+        description = "İşleminiz başarıyla tamamlandı. Diğer ilanları incelemek için ana sayfaya dönebilirsiniz!"
     else:
         status_text = "Ödeme Başarısız"
         main_color = "#e74c3c"
         error_msg = result.get('errorMessage', 'Ödeme onaylanmadı.')
         description = f"Sorun oluştu: {error_msg}"
 
-    # HTML içeriği (Aynı kalabilir)
-    # HTML içeriği (Mobil uyumlu hale getirildi)
     html_content = f"""
     <!DOCTYPE html>
     <html lang="tr">
@@ -549,7 +541,7 @@ async def payment_callback(request: Request):
     </head>
     <body style="display:flex; align-items:center; justify-content:center; height:100vh; margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f4f7f6;">
         <div style="text-align:center; padding:30px; background:white; border-radius:28px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 85%; max-width: 400px;">
-            <div style="font-size: 60px; margin-bottom: 20px;">{"" if payment_status == 'SUCCESS' else ""}</div>
+            <div style="font-size: 60px; margin-bottom: 20px;">{"✓" if payment_status == 'SUCCESS' else "✗"}</div>
             <h1 style="color:{main_color}; font-size: 24px; margin-bottom: 10px;">{status_text}</h1>
             <p style="color:#666; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">{description}</p>
             
@@ -571,58 +563,7 @@ async def payment_callback(request: Request):
     """
     return HTMLResponse(content=html_content)
 
-
-# --- ÖDEME CALLBACK ---
-@app.post("/payment-callback")
-async def payment_callback(request: Request):
-    form_data = await request.form()
-    token = form_data.get("token")
-    retrieve_request = {'locale': 'tr', 'conversationId': '0', 'token': token}
-
-    checkout_form = iyzipay.CheckoutForm().retrieve(retrieve_request, IYZICO_OPTIONS)
-    result = json.loads(checkout_form.read().decode('utf-8'))
-    order_id = result.get("conversationId")
-    payment_status = result.get("paymentStatus")
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        status = "SUCCESS" if payment_status == "SUCCESS" else "FAILED"
-        cur.execute("UPDATE orders SET status = %s WHERE order_id = %s", (status, order_id))
-        conn.commit()
-    finally:
-        conn.close()
-    return {"status": payment_status}
-
-# --- İLAN GÜNCELLEME VE LİSTELEME ---
-
-@app.put("/update-book")
-async def update_book(book: UpdateBook):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("UPDATE books SET title = %s, price = %s, description = %s WHERE book_id = %s AND user_id = %s", 
-                    (book.title, book.price, book.description, book.book_id, book.user_id))
-        conn.commit()
-        return {"status": "success"}
-    finally:
-        conn.close()
-
-@app.delete("/delete-book/{book_id}/{user_id}")
-async def delete_book(book_id: int, user_id: int):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM books WHERE book_id = %s AND user_id = %s", (book_id, user_id))
-        conn.commit()
-        return {"status": "success"}
-    finally:
-        conn.close()
-
-@app.post("/contact")
-async def contact(req: ContactRequest):
-    # İletişim mesajlarını buraya kaydedebilir veya e-posta atabilirsin.
-    return {"status": "success", "message": "Mesajınız iletildi."}
+# --- SİPARİŞ DURUMU SORGULAMA ---
 @app.get("/order-status/{order_id}")
 async def get_order_status(order_id: int):
     conn = get_db_connection()
@@ -637,22 +578,10 @@ async def get_order_status(order_id: int):
     finally:
         conn.close()
 
-@app.get("/my-books/{user_id}")
-async def get_my_books(user_id: int):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        # Burada da publisher alanını çekecek şekilde güncelledik
-        cur.execute("SELECT id, title, author, category, publisher, price, description FROM public.books WHERE user_id = %s", (user_id,))
-        books = cur.fetchall()
-        return [
-            {
-                "book_id": b[0], "title": b[1], "author": b[2], "category": b[3], 
-                "publisher": b[4], "price": b[5], "description": b[6]
-            } for b in books
-        ]
-    finally:
-        conn.close()
+# --- İLETİŞİM FORMU ---
+@app.post("/contact")
+async def contact(req: ContactRequest):
+    return {"status": "success", "message": "Mesajınız iletildi."}
 
 # --- FAVORİLER SİSTEMİ ---
 @app.post("/favorites/toggle")
@@ -699,8 +628,8 @@ async def get_favorites(user_id: int):
         cur = conn.cursor()
         query = """
             SELECT 
-                b.id, b.title, b.author, b.category, b.price, b.description, 
-                b.seller_email, b.image_path, b.is_sold, b.created_at, b.publisher,
+                b.book_id, b.title, b.author, b.category, b.price, b.description, 
+                b.seller_email, b.image_path, b.publisher,
                 u.user_id, u.email, u.university, u.department,
                 f.created_at as favorited_at
             FROM public.favorites f
@@ -711,15 +640,27 @@ async def get_favorites(user_id: int):
         """
         cur.execute(query, (user_id,))
         favorites = cur.fetchall()
-        return [
-            {
-                "id": f[0], "title": f[1], "author": f[2], "category": f[3], 
-                "price": float(f[4]), "description": f[5], "seller_email": f[6], 
-                "image_path": f[7], "is_sold": f[8], "created_at": str(f[9]), "publisher": f[10],
-                "user_id": f[11], "email": f[12], "university": f[13], "department": f[14],
-                "favorited_at": str(f[15])
-            } for f in favorites
-        ]
+        
+        result = []
+        for f in favorites:
+            image_url = f"{BASE_URL}/uploads/{f[7]}" if f[7] else None
+            result.append({
+                "book_id": f[0],
+                "title": f[1],
+                "author": f[2],
+                "category": f[3],
+                "price": float(f[4]),
+                "description": f[5],
+                "seller_email": f[6],
+                "image_path": image_url,
+                "publisher": f[8],
+                "user_id": f[9],
+                "email": f[10],
+                "university": f[11],
+                "department": f[12],
+                "favorited_at": str(f[13])
+            })
+        return result
     finally:
         conn.close()
 

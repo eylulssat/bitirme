@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/book_model.dart';
-import '../../main.dart' hide ApiService;
 import '../../services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,7 +59,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
     final result = await ApiService.toggleFavorite(_currentUserId!, widget.book.id);
     
-    if (result['status'] == 'added') {
+    if (result != null && result['status'] == 'added') {
       setState(() => _isFavorite = true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,7 +68,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           duration: Duration(seconds: 2),
         ),
       );
-    } else if (result['status'] == 'removed') {
+    } else if (result != null && result['status'] == 'removed') {
       setState(() => _isFavorite = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -366,14 +365,29 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         ),
         child: SafeArea(
           child: ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (_currentUserId != null) {
-                makePayment(
-                  context,
-                  widget.book.userId,
-                  widget.book.id,
-                  widget.book.price,
-                );
+                try {
+                  final result = await ApiService.initiatePayment(
+                    userId: _currentUserId!,
+                    bookId: widget.book.id,
+                    price: widget.book.price,
+                  );
+                  if (result['status'] == 'success' || result['checkoutFormContent'] != null) {
+                    // Ödeme sayfasına yönlendir
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Ödeme sayfasına yönlendiriliyor..."), backgroundColor: Colors.blue),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(result['errorMessage'] ?? "Ödeme başlatılamadı"), backgroundColor: Colors.red),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Bağlantı hatası"), backgroundColor: Colors.red),
+                  );
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(

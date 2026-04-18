@@ -44,27 +44,7 @@ class ProfileScreenState extends State<ProfileScreen> {
 
       setState(() {
         myBooks = data.map<Book>((b) {
-          String rawPath = b['image_path'] ?? b['imageUrl'] ?? "";
-          String finalImageUrl = "https://via.placeholder.com/150";
-
-          if (rawPath.isNotEmpty) {
-            if (rawPath.startsWith('http')) {
-              finalImageUrl = rawPath;
-            } else {
-              finalImageUrl = "$baseUrl$rawPath";
-            }
-          }
-
-          return Book(
-            bookId: b['book_id'] ?? b['id'],
-            userId: b['user_id'] ?? userId,
-            title: b['title'] ?? "Bilinmiyor",
-            author: b['author'] ?? "Bilinmiyor",
-            price: b['price'].toString(),
-            imageUrl: finalImageUrl,
-            university: b['university'] ?? "Zonguldak BEÜ",
-            description: b['description'] ?? "",
-          );
+          return Book.fromJson(b);
         }).toList();
       });
     } catch (e) {

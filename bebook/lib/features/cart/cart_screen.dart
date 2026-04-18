@@ -173,7 +173,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   }
 
   void _processPaymentRequest(Color primaryColor) async {
-    List<int> ids = cartBooks.map((b) => int.parse(b.bookId.toString())).toList();
+    List<int> ids = cartBooks.map((b) => b.id).toList();
     double total = _calculateTotal();
 
     showDialog(
@@ -281,7 +281,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      book.imageUrl ?? "https://via.placeholder.com/150",
+                      book.imagePath.isNotEmpty ? book.imagePath : "https://via.placeholder.com/150",
                       width: 50, height: 70, fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => const Icon(Icons.book, size: 40),
                     ),

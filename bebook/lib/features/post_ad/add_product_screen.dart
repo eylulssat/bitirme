@@ -64,7 +64,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       if (pickedFile != null) {
         setState(() {
           if (_selectedImages.length < 5) {
-            _selectedImages.add(File(pickedFile.path));
+            _selectedImages.add(pickedFile);
           }
         });
       }
@@ -230,14 +230,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
           }
 
           bool success = await ApiService.uploadBook(
-            userId: widget.userId ?? 4,
             title: _nameController.text.trim(),
             author: _authorController.text.trim(),
             category: _typeController.text.trim(),
             price: priceValue,
             description: _descController.text.trim(),
             sellerEmail: _mailController.text.trim(),
-            imagePath: _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
+            imageFile: _selectedImages.isNotEmpty ? _selectedImages[0] : null,
           );
 
           if (success) {
@@ -293,20 +292,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildImageThumbnail(int index) {
     return Stack(
       children: [
-        Container(
-          width: 100,
-          margin: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
-          ),
+        FutureBuilder<Uint8List>(
+          future: _selectedImages[index].readAsBytes(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Container(
+                width: 100,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  image: DecorationImage(
+                    image: MemoryImage(snapshot.data!),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              );
+            }
+            return Container(
+              width: 100,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                color: Colors.grey[300],
+              ),
+              child: const Center(child: CircularProgressIndicator()),
+            );
+          },
         ),
         Positioned(
           right: 15,
           top: 5,
           child: GestureDetector(
             onTap: () => setState(() => _selectedImages.removeAt(index)),
-            child: const CircleAvatar(backgroundColor: Colors.red, radius: 12, child: Icon(Icons.close, size: 16, color: Colors.white)),
+            child: const CircleAvatar(
+              backgroundColor: Colors.red,
+              radius: 12,
+              child: Icon(Icons.close, size: 16, color: Colors.white),
+            ),
           ),
         ),
       ],
