@@ -15,7 +15,8 @@ class AddProductScreen extends StatefulWidget {
 }
 
 class _AddProductScreenState extends State<AddProductScreen> {
-  final List<File> _selectedImages = [];
+  // Web için File yerine XFile kullanmalıyız
+  final List<XFile> _selectedImages = []; 
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _authorController = TextEditingController();
@@ -27,7 +28,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   bool isUserLoggedIn = true;
   bool _isLoading = false;
 
-  // --- FOTOĞRAF SEÇME VE SEÇENEKLERİ GÖSTERME ---
   void _showPickOptions() {
     if (_selectedImages.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -65,10 +65,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      // Windows'ta kamera hatası almamak için koruma
-      if (source == ImageSource.camera && Platform.isWindows) {
+      if (source == ImageSource.camera && !Platform.isAndroid && !Platform.isIOS) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Windows'ta kamera pasif. Arkadaşın OpenCV'yi buraya bağlayacak! 🚀")),
+          const SnackBar(content: Text("Kamera sadece mobil cihazlarda aktiftir.")),
         );
         return;
       }
@@ -76,66 +75,67 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final pickedFile = await _picker.pickImage(source: source);
       if (pickedFile != null) {
         setState(() {
-          _selectedImages.add(File(pickedFile.path));
+          _selectedImages.add(pickedFile); // Artık direkt XFile ekliyoruz
         });
       }
     } catch (e) {
       print("Hata oluştu: $e");
     }
   }
+
   Future<void> pickImageAndScan() async {
-  try {
-    final XFile? pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 50,
-      maxWidth: 1000,
-    );
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 50,
+        maxWidth: 1000,
+      );
 
-    if (pickedFile != null) {
-      Uint8List imageBytes = await pickedFile.readAsBytes();
-      await fetchBookData(imageBytes, pickedFile.name);
+      if (pickedFile != null) {
+        Uint8List imageBytes = await pickedFile.readAsBytes();
+        await fetchBookData(imageBytes, pickedFile.name);
+      }
+    } catch (e) {
+      print("Hata: $e");
     }
-  } catch (e) {
-    print("Hata: $e");
   }
-}
 
-Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
-  setState(() => _isLoading = true);
+  Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
+    setState(() => _isLoading = true);
 
-  try {
-    var request = http.MultipartRequest(
-      "POST",
-      Uri.parse("http://192.168.1.11:8001/scan"),
-    );
+    try {
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("http://127.0.0.1:8001/scan"), // Burayı da localhost yaptık
+      );
 
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        "image",
-        imageBytes,
-        filename: fileName,
-      ),
-    );
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          "image",
+          imageBytes,
+          filename: fileName,
+        ),
+      );
 
-    var response = await request.send();
-    var responseData = await response.stream.bytesToString();
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
 
-    if (response.statusCode == 200) {
-      final data = json.decode(responseData);
+      if (response.statusCode == 200) {
+        final data = json.decode(responseData);
 
-      setState(() {
-        _nameController.text = data["title"] ?? "";
-        _authorController.text = data["author"] ?? "";
-        // İŞTE EKLENMESİ GEREKEN SATIR BURASI:
-        _publisherController.text = data["publisher"] ?? ""; 
-      });
+        setState(() {
+          _nameController.text = data["title"] ?? "";
+          _authorController.text = data["author"] ?? "";
+          _publisherController.text = data["publisher"] ?? ""; 
+        });
+      }
+    } catch (e) {
+      print("Bağlantı hatası: $e");
+    } finally {
+      setState(() => _isLoading = false);
     }
-  } catch (e) {
-    print("Bağlantı hatası: $e");
-  } finally {
-    setState(() => _isLoading = false);
   }
-}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -222,151 +222,173 @@ Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
   }
 
   Widget _buildImageThumbnail(int index) {
-    return Stack(
-      children: [
-        Container(
-          width: 100,
-          margin: const EdgeInsets.only(right: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
-          ),
-        ),
-        Positioned(
-          right: 15,
-          top: 5,
-          child: GestureDetector(
-            onTap: () => setState(() => _selectedImages.removeAt(index)),
-            child: const CircleAvatar(
-              backgroundColor: Colors.red,
-              radius: 12,
-              child: Icon(Icons.close, size: 16, color: Colors.white),
+    return FutureBuilder<Uint8List>(
+      future: _selectedImages[index].readAsBytes(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            width: 100,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              color: Colors.grey[300],
             ),
-          ),
-        ),
-      ],
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        return Stack(
+          children: [
+            Container(
+              width: 100,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                image: DecorationImage(
+                  image: MemoryImage(snapshot.data!),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 15,
+              top: 5,
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedImages.removeAt(index)),
+                child: const CircleAvatar(
+                  backgroundColor: Colors.red,
+                  radius: 12,
+                  child: Icon(Icons.close, size: 16, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
- Widget _buildSubmitButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 55,
-    child: ElevatedButton(
-      onPressed: () async {
-        // 1. Giriş kontrolü (Şimdilik test için true yapabilirsin)
-        if (!isUserLoggedIn) {
-          showLoginAlert(context);
-          return;
-        }
-
-        // 2. Form Kontrolü (Boş alan var mı?)
-        if (_nameController.text.isEmpty || 
-            _authorController.text.isEmpty || 
-            _priceController.text.isEmpty ||
-            _mailController.text.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Lütfen yıldızlı (*) alanları doldurun!")),
-          );
-          return;
-        }
-
-        // 3. Fiyatı sayıya çevir
-        double? priceValue = double.tryParse(_priceController.text);
-        if (priceValue == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Geçerli bir fiyat giriniz!")),
-          );
-          return;
-        }
-
-        // 4. API'ye Gönder
-        // Not: Fotoğraf yükleme şimdilik sadece dosya yolu olarak metin bazlı gidecek
-        bool success = await ApiService.uploadBook(
-          title: _nameController.text,
-          author: _authorController.text,
-          category: _typeController.text,
-          publisher: _publisherController.text,
-          price: priceValue,
-          description: _descController.text,
-          sellerEmail: _mailController.text,
-          imagePath: _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
-        );
-
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("İlan başarıyla yayınlandı!"), backgroundColor: Colors.green),
-          );
-          // Formu temizle
-          _nameController.clear();
-          _authorController.clear();
-          _publisherController.clear();
-          _priceController.clear();
-          _typeController.clear();
-          setState(() => _selectedImages.clear());
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Hata: İlan yayınlanamadı."), backgroundColor: Colors.red),
-          );
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF6C63FF),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      ),
-      child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-    ),
-  );
-}
-  
-Widget _buildAIButton() {
-  return InkWell(
-    onTap: _isLoading ? null : pickImageAndScan,
-    child: Container(
+  Widget _buildSubmitButton() {
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)],
+      height: 55,
+      child: ElevatedButton(
+        onPressed: () async {
+          if (!isUserLoggedIn) {
+            showLoginAlert(context);
+            return;
+          }
+
+          if (_nameController.text.isEmpty || 
+              _authorController.text.isEmpty || 
+              _priceController.text.isEmpty ||
+              _mailController.text.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Lütfen yıldızlı (*) alanları doldurun!")),
+            );
+            return;
+          }
+
+          double? priceValue = double.tryParse(_priceController.text);
+          if (priceValue == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Geçerli bir fiyat giriniz!")),
+            );
+            return;
+          }
+
+          // RESMİ BYTE OLARAK OKUYUP API'YE GÖNDERME
+          Uint8List? imgBytes;
+          String? imgName;
+          if (_selectedImages.isNotEmpty) {
+            imgBytes = await _selectedImages[0].readAsBytes();
+            imgName = _selectedImages[0].name;
+          }
+
+          bool success = await ApiService.uploadBook(
+            title: _nameController.text,
+            author: _authorController.text,
+            category: _typeController.text,
+            publisher: _publisherController.text,
+            price: priceValue,
+            description: _descController.text,
+            sellerEmail: _mailController.text,
+            imageBytes: imgBytes, // Dosya verisi burada gidiyor
+            imageName: imgName,
+          );
+
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("İlan başarıyla yayınlandı!"), backgroundColor: Colors.green),
+            );
+            _nameController.clear();
+            _authorController.clear();
+            _publisherController.clear();
+            _priceController.clear();
+            _typeController.clear();
+            _descController.clear();
+            setState(() => _selectedImages.clear());
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Hata: İlan yayınlanamadı."), backgroundColor: Colors.red),
+            );
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6C63FF),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
-        borderRadius: BorderRadius.circular(20),
+        child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       ),
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : const Column(
-              children: [
-                Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
-                SizedBox(height: 15),
-                Text("ISBN Barkodunu Tara",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-              ],
-            ),
-    ),
-  );
-}
+    );
+  }
+  
+  Widget _buildAIButton() {
+    return InkWell(
+      onTap: _isLoading ? null : pickImageAndScan,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            : const Column(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
+                  SizedBox(height: 15),
+                  Text("ISBN Barkodunu Tara",
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+      ),
+    );
+  }
 
   Widget _buildInput({required String label, required IconData icon, bool isNumber = false, TextEditingController? controller}) {
-  return TextField(
-    controller: controller,
-    keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-    
-    inputFormatters: isNumber 
-        ? [FilteringTextInputFormatter.digitsOnly] 
-        : null,
-        
-    decoration: InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15), 
-        borderSide: BorderSide.none
+    return TextField(
+      controller: controller,
+      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      inputFormatters: isNumber 
+          ? [FilteringTextInputFormatter.digitsOnly] 
+          : null,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15), 
+          borderSide: BorderSide.none
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildMailSuggestions() {
     return const SizedBox.shrink();
@@ -385,28 +407,29 @@ Widget _buildAIButton() {
       ],
     );
   }
-void showLoginAlert(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: const Text("Giriş Yapmanız Gerekiyor"),
-        content: const Text("İlan yayınlamak için lütfen giriş yapınız."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Kapat"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Navigate to login screen
-            },
-            child: const Text("Giriş Yap"),
-          ),
-        ],
-      );
-    },
-  );
-}
+
+  void showLoginAlert(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Giriş Yapmanız Gerekiyor"),
+          content: const Text("İlan yayınlamak için lütfen giriş yapınız."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Kapat"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // TODO: Navigate to login screen
+              },
+              child: const Text("Giriş Yap"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

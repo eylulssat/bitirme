@@ -24,8 +24,8 @@ class MyApp extends StatelessWidget {
 
 // ------------------- API SERVİSİ -------------------
 class ApiService {
-  // Yeni IP adresin: 192.168.67.99
-  final String baseUrl = "http://192.168.67.158:8000"; 
+  
+  final String baseUrl = "http://192.168.1.30:8000"; 
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {

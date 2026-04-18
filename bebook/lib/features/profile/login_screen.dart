@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; //
-import 'dart:convert'; //
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'forgot_password_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
-    const String apiUrl = "http://192.168.67.158:8000/login"; // Web için localhost
+    const String apiUrl = "http://192.168.1.30:8000/login";
 
     try {
       final response = await http.post(
@@ -47,8 +48,16 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
+        // Kullanıcı bilgilerini SharedPreferences'a kaydet
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', data['user_id']);
+        await prefs.setString('user_email', data['user_email']);
+        await prefs.setString('university', data['university']);
+        await prefs.setString('department', data['department']);
+        
         if (mounted) {
           Navigator.pop(context, {
+            "user_id": data['user_id'],
             "user_email": data['user_email'],
             "university": data['university'],
             "department": data['department'],
@@ -138,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         if (_formKey.currentState!.validate()) {
-                          _handleLogin(); // API Fonksiyonunu çağırıyoruz
+                          _handleLogin();
                         }
                       },
                       style: ElevatedButton.styleFrom(

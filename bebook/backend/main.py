@@ -6,8 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 import iyzipay
 import json
 from typing import Optional
-
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
+import os
+import uuid
 app = FastAPI()
+
+# Uploads klasörünü backend dizininde oluştur
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # --- CORS AYARLARI ---
 app.add_middleware(
@@ -68,6 +76,10 @@ class UpdateBook(BaseModel):
     price: float
     description: str
 
+class FavoriteToggle(BaseModel):
+    user_id: int
+    book_id: int
+
 # --- KAYIT OLMA (SIGNUP) ---
 @app.post("/signup")
 async def signup(user: UserSignup):
@@ -119,25 +131,44 @@ async def login(user: UserLogin):
 
 # --- YENİ KİTAP İLANI YAYINLA ---
 @app.post("/books")
-async def upload_book(book: BookCreate):
+async def upload_book(
+    title: str = Form(...),
+    author: str = Form(...),
+    category: str = Form(...),
+    publisher: str = Form(""),
+    price: float = Form(...),
+    description: str = Form(""),
+    seller_email: str = Form(...),
+    image: UploadFile = File(None)
+):
     conn = get_db_connection()
     try:
+        image_url = ""
+        # 1. Eğer resim gönderildiyse bunu kaydet
+        if image and image.filename:
+            file_ext = image.filename.split(".")[-1]
+            # Benzersiz dosya adı oluştur (timestamp + uuid)
+            file_name = f"{uuid.uuid4()}.{file_ext}"
+            
+            # UPLOAD_DIR sabitini kullan
+            file_path = os.path.join(UPLOAD_DIR, file_name)
+            
+            # Dosyayı kaydet
+            with open(file_path, "wb") as buffer:
+                buffer.write(await image.read())
+            
+            # 2. Veritabanına sadece dosya adını kaydet (IP değişikliğine karşı esnek)
+            # Frontend'de baseUrl ile birleştirilecek
+            image_url = f"/uploads/{file_name}"
+
         cur = conn.cursor()
-        # SQL sorgusuna 'publisher' alanı eklendi
         query = """
             INSERT INTO public.books 
             (title, author, category, publisher, price, description, seller_email, image_path) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         cur.execute(query, (
-            book.title, 
-            book.author, 
-            book.category, 
-            book.publisher, 
-            book.price, 
-            book.description, 
-            book.seller_email, 
-            book.image_path
+            title, author, category, publisher, price, description, seller_email, image_url
         ))
         conn.commit()
         return {"status": "success", "message": "İlan başarıyla oluşturuldu!"}
@@ -145,21 +176,31 @@ async def upload_book(book: BookCreate):
         if conn: conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
-        conn.close()
-
+        if conn: conn.close()
 # --- TÜM KİTAPLARI GETİR (Ana Sayfa) ---
 @app.get("/books")
 async def fetch_books():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        # Publisher'ı da çekiyoruz ki Flutter'da görebilelim
-        cur.execute("SELECT id, title, author, category, publisher, price, description, image_path FROM public.books WHERE is_sold = FALSE")
+        # books tablosu (b) ile users tablosunu (u) e-posta üzerinden birleştiriyoruz
+        query = """
+            SELECT 
+                b.id, b.title, b.author, b.category, b.price, b.description, 
+                b.seller_email, b.image_path, b.is_sold, b.created_at, b.publisher,
+                u.user_id, u.email, u.university, u.department
+            FROM public.books b
+            LEFT JOIN public.users u ON b.seller_email = u.email
+            WHERE b.is_sold = FALSE
+        """
+        cur.execute(query)
         books = cur.fetchall()
         return [
             {
                 "id": b[0], "title": b[1], "author": b[2], "category": b[3], 
-                "publisher": b[4], "price": b[5], "description": b[6], "image_path": b[7]
+                "price": float(b[4]), "description": b[5], "seller_email": b[6], 
+                "image_path": b[7], "is_sold": b[8], "created_at": str(b[9]), "publisher": b[10],
+                "user_id": b[11], "email": b[12], "university": b[13], "department": b[14]
             } for b in books
         ]
     finally:
@@ -186,7 +227,7 @@ async def create_payment(payment: CreatePayment):
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': 'http://192.168.67.158:8000/payment-callback',
+            'callbackUrl': 'http://192.168.1.30:8000/payment-callback',
             'buyer': {
                 'id': str(payment.user_id),
                 'name': 'Eylul',
@@ -197,7 +238,7 @@ async def create_payment(payment: CreatePayment):
                 'lastLoginDate': '2023-10-05 12:43:35',
                 'registrationDate': '2023-10-05 12:43:35',
                 'registrationAddress': 'Adres',
-                'ip': '127.0.0.1',
+                'ip': '192.168.1.30',
                 'city': 'Istanbul',
                 'country': 'Turkey',
                 'zipCode': '34732'
@@ -263,5 +304,89 @@ async def get_my_books(user_id: int):
                 "publisher": b[4], "price": b[5], "description": b[6]
             } for b in books
         ]
+    finally:
+        conn.close()
+
+# --- FAVORİLER SİSTEMİ ---
+@app.post("/favorites/toggle")
+async def toggle_favorite(favorite: FavoriteToggle):
+    """Favorilere ekle/çıkar"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Önce bu kitap favorilerde mi kontrol et
+        cur.execute(
+            "SELECT id FROM public.favorites WHERE user_id = %s AND book_id = %s",
+            (favorite.user_id, favorite.book_id)
+        )
+        existing = cur.fetchone()
+        
+        if existing:
+            # Favorilerde varsa çıkar
+            cur.execute(
+                "DELETE FROM public.favorites WHERE user_id = %s AND book_id = %s",
+                (favorite.user_id, favorite.book_id)
+            )
+            conn.commit()
+            return {"status": "removed", "message": "Favorilerden çıkarıldı"}
+        else:
+            # Favorilerde yoksa ekle
+            cur.execute(
+                "INSERT INTO public.favorites (user_id, book_id) VALUES (%s, %s)",
+                (favorite.user_id, favorite.book_id)
+            )
+            conn.commit()
+            return {"status": "added", "message": "Favorilere eklendi"}
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/favorites/{user_id}")
+async def get_favorites(user_id: int):
+    """Kullanıcının favori kitaplarını getir"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = """
+            SELECT 
+                b.id, b.title, b.author, b.category, b.price, b.description, 
+                b.seller_email, b.image_path, b.is_sold, b.created_at, b.publisher,
+                u.user_id, u.email, u.university, u.department,
+                f.created_at as favorited_at
+            FROM public.favorites f
+            JOIN public.books b ON f.book_id = b.id
+            LEFT JOIN public.users u ON b.seller_email = u.email
+            WHERE f.user_id = %s
+            ORDER BY f.created_at DESC
+        """
+        cur.execute(query, (user_id,))
+        favorites = cur.fetchall()
+        return [
+            {
+                "id": f[0], "title": f[1], "author": f[2], "category": f[3], 
+                "price": float(f[4]), "description": f[5], "seller_email": f[6], 
+                "image_path": f[7], "is_sold": f[8], "created_at": str(f[9]), "publisher": f[10],
+                "user_id": f[11], "email": f[12], "university": f[13], "department": f[14],
+                "favorited_at": str(f[15])
+            } for f in favorites
+        ]
+    finally:
+        conn.close()
+
+@app.get("/favorites/check/{user_id}/{book_id}")
+async def check_favorite(user_id: int, book_id: int):
+    """Bir kitabın favorilerde olup olmadığını kontrol et"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM public.favorites WHERE user_id = %s AND book_id = %s",
+            (user_id, book_id)
+        )
+        exists = cur.fetchone() is not None
+        return {"is_favorite": exists}
     finally:
         conn.close()

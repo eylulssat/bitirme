@@ -6,6 +6,7 @@ import 'about_bebook_screen.dart';
 import 'favorites_screen.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
+import '../../models/book_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +24,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? userUniversity;
   String? userDepartment;
   int? userId;
+
   @override
   void initState() {
     super.initState();
@@ -40,19 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final data = await ApiService.getMyBooks(userId!);
 
       setState(() {
-        myBooks = data
-            .map<Book>((b) => Book(
-                  bookId: b['book_id'],
-                  userId: b['user_id'],
-                  title: b['title'],
-                  author: b['author'] ?? "Bilinmiyor",
-                  price: b['price'].toString(),
-                  imageUrl: b['imageUrl'] ?? "https://via.placeholder.com/150",
-                  university: b['university'] ?? "BEÜ",
-                  description: b['description'],
-                ))
-            .toList();
-
+        // İŞTE BÜTÜN HATALARI ÇÖZEN O TEK SATIR:
+        myBooks = data.map<Book>((b) => Book.fromJson(b)).toList();
         isLoading = false;
       });
     } catch (e) {
@@ -173,7 +164,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 color: Colors.white, borderRadius: BorderRadius.circular(20)),
             child: Row(
               children: [
-                // Baş harfi dinamik yaptık
                 CircleAvatar(
                     radius: 30,
                     backgroundColor: const Color(0xFF6C63FF),
@@ -207,9 +197,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             "Satışa Sunduğum Kitaplar",
             primaryColor,
             () {
-              
-             
-
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
@@ -224,11 +211,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         crossAxisCount: 2,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
+                        childAspectRatio: 0.75, // Kartların yüksekliği için eklendi
                       ),
                       itemBuilder: (context, index) {
                         return GestureDetector(
                           child: BookCard(book: myBooks[index]),
-                          
                         );
                       },
                     ),
