@@ -45,7 +45,7 @@ class _MainWrapperState extends State<MainWrapper> {
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
-            BoxShadow(blurRadius: 20, color: Colors.black.withOpacity(.05))
+            BoxShadow(blurRadius: 20, color: Colors.black.withValues(alpha: 0.5))
           ],
         ),
         child: SafeArea(
@@ -59,14 +59,14 @@ class _MainWrapperState extends State<MainWrapper> {
               iconSize: 24,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               duration: const Duration(milliseconds: 400),
-              tabBackgroundColor: primaryColor.withOpacity(0.1),
+              tabBackgroundColor: primaryColor.withValues(alpha: 0.5),
               color: Colors.grey[600],
               tabs: const [
-                GButton(icon: Icons.home_rounded, text: 'Keşfet'),
-                GButton(icon: Icons.search_rounded, text: 'Ara'),
-                GButton(icon: Icons.add_circle_outline, text: 'Sat'),
-                GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
-                GButton(icon: Icons.person_outline, text: 'Profil'),
+                GButton(icon: Icons.home_rounded,  ),
+                GButton(icon: Icons.search_rounded, ),
+                GButton(icon: Icons.add_circle_outline, ),
+                GButton(icon: Icons.shopping_cart_outlined,),
+                GButton(icon: Icons.person_outline),
               ],
               selectedIndex: _selectedIndex,
               onTabChange: (index) async {

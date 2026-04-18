@@ -24,8 +24,9 @@ class MyApp extends StatelessWidget {
 
 // ------------------- API SERVİSİ -------------------
 class ApiService {
-  static const String baseUrl = "http://192.168.1.29:8000"; 
+  static const String baseUrl = "http://192.168.1.7:8000"; 
 
+ 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {
     final url = Uri.parse('$baseUrl/create-payment');

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../main.dart' hide ApiService;
 import '../../services/api_service.dart';
 import '../features/post_ad/edit_book_screen.dart';
 
@@ -92,7 +91,7 @@ class _BookCardState extends State<BookCard> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.5),
               blurRadius: 10,
               offset: const Offset(0, 5)),
         ],
@@ -265,7 +264,7 @@ class _BookCardState extends State<BookCard> {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.5),
                       shape: BoxShape.circle),
                   child: Icon(
                       _isFavorite ? Icons.favorite : Icons.favorite_border,

@@ -24,7 +24,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  final String baseUrl = "http://192.168.1.29:8000/uploads/";
+  final String baseUrl = "http://192.168.1.7:8000/uploads/";
 
   @override
   void initState() {
@@ -199,13 +199,13 @@ class ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                      color: Colors.black.withValues(alpha: 0.5), blurRadius: 10)
                 ]),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 35,
-                  backgroundColor: primaryColor.withOpacity(0.2),
+                  backgroundColor: primaryColor..withValues(alpha: 0.5),
                   child: Text(
                     (userEmail != null && userEmail!.isNotEmpty)
                         ? userEmail![0].toUpperCase()

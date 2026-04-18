@@ -24,10 +24,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _authorController = TextEditingController();
   final TextEditingController _typeController = TextEditingController();
+  final TextEditingController _departmentController = TextEditingController();
   final TextEditingController _publisherController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   late TextEditingController _mailController;
+
+  bool isUserLoggedIn = true; // Test aşamasında true, normalde auth kontrolü yapılmalı
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -41,12 +45,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _nameController.dispose();
     _authorController.dispose();
     _typeController.dispose();
+    _publisherController.dispose();
     _priceController.dispose();
     _descController.dispose();
     _mailController.dispose();
     super.dispose();
   }
 
+  // --- Resim Seçme İşlemleri ---
   Future<void> _pickImage(ImageSource source) async {
     try {
       if (source == ImageSource.camera && Platform.isWindows) {
@@ -66,64 +72,60 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: () async {
-          if (_nameController.text.isEmpty ||
-              _authorController.text.isEmpty ||
-              _priceController.text.isEmpty) {
-            _showSnackBar("Lütfen gerekli alanları doldurun!", Colors.orange);
-            return;
-          }
+  // --- AI Barkod Tarama İşlemleri ---
+  Future<void> pickImageAndScan() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 50,
+        maxWidth: 1000,
+      );
 
-          double? priceValue = double.tryParse(_priceController.text);
-          if (priceValue == null) {
-            _showSnackBar("Geçerli bir fiyat giriniz!", Colors.orange);
-            return;
-          }
-
-          // --- API'ye Gönderim ---
-          // imagePath kısmında .split('/').last kullanarak sadece dosya adını gönderiyoruz.
-          bool success = await ApiService.uploadBook(
-            userId: widget.userId ?? 4,
-            title: _nameController.text.trim(),
-            author: _authorController.text.trim(),
-            category: _typeController.text.trim(),
-            price: priceValue,
-            description: _descController.text.trim(),
-            sellerEmail: _mailController.text.trim(),
-            imagePath:
-                _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
-          );
-
-          if (success) {
-            if (!mounted) return;
-            _showSnackBar("İlan başarıyla yayınlandı! ", Colors.green);
-
-            await Future.delayed(const Duration(milliseconds: 600));
-
-            if (!mounted) return;
-            Navigator.pop(context, true);
-          } else {
-            if (!mounted) return;
-            _showSnackBar("Hata: Sunucuya bağlanılamadı.", Colors.red);
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6C63FF),
-          foregroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: const Text("İlanı Yayınla",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      ),
-    );
+      if (pickedFile != null) {
+        Uint8List imageBytes = await pickedFile.readAsBytes();
+        await fetchBookData(imageBytes, pickedFile.name);
+      }
+    } catch (e) {
+      debugPrint("Hata: $e");
+    }
   }
 
+  Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
+    setState(() => _isLoading = true);
+    try {
+      var request = http.MultipartRequest(
+        "POST",
+        Uri.parse("http://192.168.1.7:8001/scan"), // AI Sunucu IP'si
+      );
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          "image",
+          imageBytes,
+          filename: fileName,
+        ),
+      );
+
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        final data = json.decode(responseData);
+        setState(() {
+          _nameController.text = data["title"] ?? "";
+          _authorController.text = data["author"] ?? "";
+          _publisherController.text = data["publisher"] ?? "";
+        });
+        _showSnackBar("Kitap bilgileri AI ile getirildi!", Colors.green);
+      }
+    } catch (e) {
+      _showSnackBar("Bağlantı hatası: Tarama sunucusuna ulaşılamadı.", Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Arayüz Bileşenleri ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,50 +149,31 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(height: 40),
             _buildDivider("veya manuel"),
             const SizedBox(height: 30),
-            _buildInput(
-                label: "Kitap Adı *",
-                icon: Icons.book_outlined,
-                controller: _nameController),
+            _buildInput(label: "Kitap Adı *", icon: Icons.book_outlined, controller: _nameController),
             const SizedBox(height: 15),
-            _buildInput(
-                label: "Yazar *",
-                icon: Icons.person_outline,
-                controller: _authorController),
+            _buildInput(label: "Yazar *", icon: Icons.person_outline, controller: _authorController),
             const SizedBox(height: 15),
-            _buildInput(
-                label: "Tür",
-                icon: Icons.category_outlined,
-                controller: _typeController),
+            _buildInput(label: "Tür", icon: Icons.category_outlined, controller: _typeController),
             const SizedBox(height: 15),
-            _buildInput(
-                label: "Fiyat (TL) *",
-                icon: Icons.sell_outlined,
-                isNumber: true,
-                controller: _priceController),
+            _buildInput(label: "Bölüm", icon: Icons.confirmation_num_outlined, controller: _departmentController),
             const SizedBox(height: 15),
-            _buildInput(
-                label: "Açıklama",
-                icon: Icons.description_outlined,
-                controller: _descController),
+            _buildInput(label: "Yayınevi", icon: Icons.business_outlined, controller: _publisherController),
             const SizedBox(height: 15),
-            _buildInput(
-                label: "İletişim Maili",
-                icon: Icons.contact_mail_outlined,
-                controller: _mailController),
+            _buildInput(label: "Fiyat (TL) *", icon: Icons.sell_outlined, isNumber: true, controller: _priceController),
+            const SizedBox(height: 15),
+            _buildInput(label: "Açıklama", icon: Icons.description_outlined, controller: _descController),
+            const SizedBox(height: 15),
+            _buildInput(label: "İletişim Maili *", icon: Icons.contact_mail_outlined, controller: _mailController),
             const SizedBox(height: 30),
-            const Text("Fotoğraf Ekle",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text("Fotoğraf Ekle", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
             SizedBox(
               height: 100,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _selectedImages.length +
-                    (_selectedImages.length < 5 ? 1 : 0),
+                itemCount: _selectedImages.length + (_selectedImages.length < 5 ? 1 : 0),
                 itemBuilder: (context, index) {
-                  if (index == _selectedImages.length) {
-                    return _buildAddPhotoButton();
-                  }
+                  if (index == _selectedImages.length) return _buildAddPhotoButton();
                   return _buildImageThumbnail(index);
                 },
               ),
@@ -204,30 +187,88 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  void _showPickOptions() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Galeriden Seç'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Kamerayı Aç'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
-            ),
-          ],
+  Widget _buildAIButton() {
+    return InkWell(
+      onTap: _isLoading ? null : pickImageAndScan,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
+          borderRadius: BorderRadius.circular(20),
         ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            : const Column(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
+                  SizedBox(height: 15),
+                  Text("ISBN Barkodunu Tara",
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 55,
+      child: ElevatedButton(
+        onPressed: () async {
+          if (_nameController.text.isEmpty || _authorController.text.isEmpty || _priceController.text.isEmpty) {
+            _showSnackBar("Lütfen gerekli alanları doldurun!", Colors.orange);
+            return;
+          }
+
+          double? priceValue = double.tryParse(_priceController.text);
+          if (priceValue == null) {
+            _showSnackBar("Geçerli bir fiyat giriniz!", Colors.orange);
+            return;
+          }
+
+          bool success = await ApiService.uploadBook(
+            userId: widget.userId ?? 4,
+            title: _nameController.text.trim(),
+            author: _authorController.text.trim(),
+            category: _typeController.text.trim(),
+            price: priceValue,
+            description: _descController.text.trim(),
+            sellerEmail: _mailController.text.trim(),
+            imagePath: _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
+          );
+
+          if (success) {
+            _showSnackBar("İlan başarıyla yayınlandı! ", Colors.green);
+            await Future.delayed(const Duration(milliseconds: 600));
+            if (mounted) Navigator.pop(context, true);
+          } else {
+            _showSnackBar("Hata: Sunucuya bağlanılamadı.", Colors.red);
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF6C63FF),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        ),
+        child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  // --- Küçük Yardımcı Widgetlar ---
+  Widget _buildInput({required String label, required IconData icon, bool isNumber = false, TextEditingController? controller}) {
+    return TextField(
+      controller: controller,
+      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
       ),
     );
   }
@@ -243,8 +284,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: const Color(0xFF6C63FF)),
         ),
-        child: const Icon(Icons.add_a_photo_outlined,
-            color: Color(0xFF6C63FF), size: 30),
+        child: const Icon(Icons.add_a_photo_outlined, color: Color(0xFF6C63FF), size: 30),
       ),
     );
   }
@@ -257,8 +297,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           margin: const EdgeInsets.only(right: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
-            image: DecorationImage(
-                image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
+            image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
           ),
         ),
         Positioned(
@@ -266,88 +305,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
           top: 5,
           child: GestureDetector(
             onTap: () => setState(() => _selectedImages.removeAt(index)),
-            child: const CircleAvatar(
-              backgroundColor: Colors.red,
-              radius: 12,
-              child: Icon(Icons.close, size: 16, color: Colors.white),
-            ),
+            child: const CircleAvatar(backgroundColor: Colors.red, radius: 12, child: Icon(Icons.close, size: 16, color: Colors.white)),
           ),
         ),
       ],
     );
   }
 
-  void _showSnackBar(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-  }
-
-  Widget _buildAIButton() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Column(
-        children: [
-          Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
-          SizedBox(height: 15),
-          Text("ISBN Barkodunu Tara",
-              style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18)),
-        ],
-      ),
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : const Column(
-              children: [
-                Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
-                SizedBox(height: 15),
-                Text("ISBN Barkodunu Tara",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-              ],
-            ),
-    ),
-  );
-}
-
-  Widget _buildInput(
-      {required String label,
-      required IconData icon,
-      bool isNumber = false,
-      TextEditingController? controller}) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      inputFormatters:
-          isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none),
+  void _showPickOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeriden Seç'),
+                onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); }),
+            ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Kamerayı Aç'),
+                onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); }),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDivider(String text) {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(text)),
-        const Expanded(child: Divider()),
-      ],
-    );
+    return Row(children: [
+      const Expanded(child: Divider()),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text(text)),
+      const Expanded(child: Divider()),
+    ]);
+  }
+
+  void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 }
