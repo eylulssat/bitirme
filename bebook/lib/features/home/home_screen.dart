@@ -19,6 +19,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Bebook Keşfet",
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+            
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [

@@ -14,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isObscure = true;
+  bool _isLoading = false; // Giriş yaparken butonu pasif yapmak için ekledik
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
 
@@ -33,14 +34,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
-    const String apiUrl = "http://192.168.1.30:8000/login";
+    // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
+    const String apiUrl = "http://192.168.1.30:8000/login"; 
+
+    setState(() => _isLoading = true);
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "email": _emailController.text,
+          "email": _emailController.text.trim(),
           "password": _passwordController.text,
         }),
       );
@@ -56,18 +60,22 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('department', data['department']);
         
         if (mounted) {
+          // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz
           Navigator.pop(context, {
-            "user_id": data['user_id'],
+            "user_id": data['user_id'], // Bu çok önemli!
             "user_email": data['user_email'],
             "university": data['university'],
             "department": data['department'],
           });
         }
       } else {
-        _showErrorSnackBar("E-posta veya şifre hatalı!");
+        final errorData = jsonDecode(response.body);
+        _showErrorSnackBar(errorData['detail'] ?? "E-posta veya şifre hatalı!");
       }
     } catch (e) {
-      _showErrorSnackBar("Bağlantı hatası: Sunucu açık mı?");
+      _showErrorSnackBar("Bağlantı hatası: Sunucuya erişilemiyor.");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -102,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 30),
                   TextFormField(
                     controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     validator: (v) => (v == null || v.isEmpty) ? "E-posta giriniz" : null,
                     decoration: InputDecoration(
                       labelText: "E-posta", 
@@ -145,16 +154,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState!.validate()) {
-                          _handleLogin();
-                        }
-                      },
+                      onPressed: _isLoading 
+                        ? null // İstek devam ederken butonu pasif yap
+                        : () {
+                            if (_formKey.currentState!.validate()) {
+                              _handleLogin();
+                            }
+                          },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor, 
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: _isLoading 
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

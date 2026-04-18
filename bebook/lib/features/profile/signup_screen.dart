@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // HTTP istekleri için
-import 'dart:convert'; // JSON dönüşümleri için
+import 'package:bebook/services/api_service.dart'; // ApiService'i import ettik
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -12,13 +11,11 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // 1. VERİLERİ YAKALAMAK İÇİN CONTROLLER'LAR
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? _selectedUniversity;
   String? _selectedDepartment;
 
-  // Liste Verileri
   final List<String> _universities = [
     'Zonguldak Bülent Ecevit Üniversitesi',
     'İstanbul Teknik Üniversitesi',
@@ -41,37 +38,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
     'Diğer'
   ];
 
+  // --- KAYIT İŞLEMİ ---
   Future<void> _handleSignup() async {
-const String apiUrl = "http://192.168.1.30:8000/signup"; // Web'de çalıştığın için localhost kullanmalısın.
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "email": _emailController.text,
-          "password": _passwordController.text,
-          "university": _selectedUniversity,
-          "department": _selectedDepartment,
-        }),
-      );
+    // ApiService içindeki metodu çağırıyoruz
+    bool success = await ApiService.signup(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      university: _selectedUniversity ?? "",
+      department: _selectedDepartment ?? "",
+    );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _showSnackBar("Başarılı: ${data['message']}", Colors.green);
-        Navigator.pop(context); 
-      } else {
-        final errorData = jsonDecode(response.body);
-        _showSnackBar("Hata: ${errorData['detail']}", Colors.red);
-      }
-    } catch (e) {
-      _showSnackBar("Bağlantı hatası: Sunucu açık mı?", Colors.orange);
+    if (success) {
+      _showSnackBar("Başarıyla üye oldun! Giriş yapabilirsin.", Colors.green);
+      if (mounted) Navigator.pop(context); 
+    } else {
+      _showSnackBar("Kayıt başarısız. Bu e-posta zaten kullanımda olabilir.", Colors.red);
     }
   }
 
   void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: color),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -148,6 +144,7 @@ const String apiUrl = "http://192.168.1.30:8000/signup"; // Web'de çalıştığ
     );
   }
 
+  // --- Yardımcı Widgetlar ---
   Widget _buildTextField(String label, IconData icon, {bool isPassword = false, required TextEditingController controller}) {
     return TextFormField(
       controller: controller, 
