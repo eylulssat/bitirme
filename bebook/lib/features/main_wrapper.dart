@@ -15,22 +15,27 @@ class MainWrapper extends StatefulWidget {
 class _MainWrapperState extends State<MainWrapper> { 
   int _selectedIndex = 0;
 
- 
+  // 🔥 1. ADIM: ProfileScreen'in içindeki fonksiyonlara erişmek için bir Key tanımlıyoruz.
+  // ProfileScreen'in State sınıfının public olması (adı başında _ olmaması) gerekebilir.
+  final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF); 
+
     final List<Widget> _pages = [
-      const HomeScreen(),         // 0: Keşfet
+      const HomeScreen(),                 // 0: Keşfet
       const Center(child: Text("Arama")), // 1: Ara
-      const AddProductScreen(),   // 2: Sat
-      CartScreen(onDiscoverPressed: () { // 3: Sepetim
+      const SizedBox(),                   // 2: Sat
+      CartScreen(onDiscoverPressed: () {  // 3: Sepetim
         setState(() {
-          _selectedIndex = 0; // Butona basınca Keşfet'e (0) gönder
+          _selectedIndex = 0;
         });
       }),
-      const ProfileScreen(),      // 4: Profil
+      // 🔥 2. ADIM: Key'i buraya bağlıyoruz
+      ProfileScreen(key: _profileKey),    // 4: Profil
     ];
+
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
@@ -40,14 +45,13 @@ class _MainWrapperState extends State<MainWrapper> {
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
-            BoxShadow(blurRadius: 20, color: Colors.black.withOpacity(.05))
+            BoxShadow(blurRadius: 20, color: Colors.black.withValues(alpha: 0.5))
           ],
         ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
             child: GNav(
-              
               rippleColor: Colors.grey[300]!,
               hoverColor: Colors.grey[100]!,
               gap: 8,
@@ -55,20 +59,39 @@ class _MainWrapperState extends State<MainWrapper> {
               iconSize: 24,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               duration: const Duration(milliseconds: 400),
-              tabBackgroundColor: primaryColor.withOpacity(0.1),
+              tabBackgroundColor: primaryColor.withValues(alpha: 0.5),
               color: Colors.grey[600],
               tabs: const [
-                GButton(icon: Icons.home_rounded, text: 'Keşfet'),
-                GButton(icon: Icons.search_rounded, text: 'Ara'),
-                GButton(icon: Icons.add_circle_outline, text: 'Sat'),
-GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
-                GButton(icon: Icons.person_outline, text: 'Profil'),
+                GButton(icon: Icons.home_rounded,  ),
+                GButton(icon: Icons.search_rounded, ),
+                GButton(icon: Icons.add_circle_outline, ),
+                GButton(icon: Icons.shopping_cart_outlined,),
+                GButton(icon: Icons.person_outline),
               ],
               selectedIndex: _selectedIndex,
-              onTabChange: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
+              onTabChange: (index) async {
+                if (index == 2) {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AddProductScreen(),
+                    ),
+                  );
+
+                  if (result == true) {
+                    // 🔥 3. ADIM: Profil sayfasındaki yenileme fonksiyonunu tetikliyoruz
+                    // ProfileScreen içinde ilanları çeken fonksiyonun adının 'fetchUserBooks' olduğunu varsayıyorum.
+                    _profileKey.currentState?.fetchMyBooks(); 
+
+                    setState(() {
+                      _selectedIndex = 4; // Profile'a git
+                    });
+                  }
+                } else {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                }
               },
             ),
           ),
