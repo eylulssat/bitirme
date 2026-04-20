@@ -24,7 +24,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  final String baseUrl = "http://192.168.1.29:8000/uploads/";
+  final String baseUrl = "http://192.168.67.42:8000/uploads/";
 
   @override
   void initState() {
@@ -271,7 +271,6 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showMyBooksSheet() {
-    // Sayfa açılırken veriler boşsa tekrar çekelim
     if (myBooks.isEmpty && !isLoading) {
       fetchMyBooks();
     }
@@ -280,7 +279,7 @@ class ProfileScreenState extends State<ProfileScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder( // Alt sayfa içinde state yönetimi için
+      builder: (context) => StatefulBuilder( 
         builder: (context, setModalState) => Container(
           height: MediaQuery.of(context).size.height * 0.75,
           decoration: const BoxDecoration(
@@ -315,15 +314,14 @@ class ProfileScreenState extends State<ProfileScreen> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 15,
                               mainAxisSpacing: 15,
-                              childAspectRatio: 0.65, // Butonlar eklendiği için boyutu biraz artırdık
+                              childAspectRatio: 0.65, 
                             ),
                             itemBuilder: (context, index) => BookCard(
                               book: myBooks[index],
-                              isMyPost: true, // 🔥 Düzenle/Sil butonlarını aktif eder
+                              isMyPost: true, 
                               onUpdated: () {
-                                // Bir ilan silindiğinde veya güncellendiğinde:
-                                fetchMyBooks(); // Ana veriyi güncelle
-                                Navigator.pop(context); // BottomSheet'i kapat (tazelenmiş veriyi görmek için tekrar açılır)
+                                fetchMyBooks(); 
+                                Navigator.pop(context); 
                               },
                             ),
                           ),

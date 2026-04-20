@@ -34,10 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
     // Android Emulator için: 10.0.2.2, Gerçek cihaz/Web için kendi IP'n
-    const String apiUrl = "http://192.168.1.29:8000/login"; 
+    const String apiUrl = "http://192.168.67.42:8000/login"; 
 
     setState(() => _isLoading = true);
-    const String apiUrl = "http://192.168.67.158:8000/login"; // Web için localhost
 
     try {
       final response = await http.post(

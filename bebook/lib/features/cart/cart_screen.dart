@@ -16,7 +16,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   bool _isWaitingForPayment = false;
-  bool _isAgreedToTerms = false; // Sözleşme onayı için yeni değişken
+  bool _isAgreedToTerms = false; 
   int? lastOrderId; 
 
   @override
@@ -66,12 +66,11 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
     return total;
   }
 
-  // Mesafeli Satış Sözleşmesi İçeriği
   void _showTermsDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Mesafeli Satış Sözleşmesi"),
+        title: const Text("li Satış Sözleşmesi"),
         content: const SingleChildScrollView(
           child: Text(
             "1. TARAFLAR: İşbu sözleşme BEBOOK üzerinden alışveriş yapan kullanıcı ile satıcı arasındadır.\n\n"
@@ -91,12 +90,11 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   void _completePayment(Color primaryColor) async {
     if (cartBooks.isEmpty) return;
 
-    // Diyalog her açıldığında onay kutusunu sıfırlayalım
     _isAgreedToTerms = false; 
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( // Checkbox'ın anlık güncellenmesi için gerekli
+      builder: (context) => StatefulBuilder( 
         builder: (context, setDialogState) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -162,7 +160,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                       const SnackBar(content: Text("Lütfen tüm alanları doldurun.")),
                     );
                   }
-                } : null, // Onay kutusu seçili değilse buton inaktif olur
+                } : null, 
                 child: const Text("Ödemeye Geç", style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -187,9 +185,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         userId: 4,
         bookIds: ids,
         totalPrice: total,
-        // Backend güncellenince buraya:
-        // fullName: _nameController.text,
-        // address: _addressController.text,
+        
       );
 
       if (!mounted) return;

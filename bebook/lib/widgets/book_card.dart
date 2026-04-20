@@ -3,7 +3,6 @@ import '../../main.dart' hide ApiService;
 import '../../services/api_service.dart';
 import '../features/post_ad/edit_book_screen.dart';
 
-// Book sınıfı aynı kalıyor...
 class Book {
   final int bookId;
   final int userId;
@@ -27,7 +26,7 @@ class Book {
 }
 
 List<Book> favoriteBooks = [];
-List<Book> cartBooks = []; // Sepet için global liste
+List<Book> cartBooks = []; 
 
 class BookCard extends StatefulWidget {
   final Book book;
@@ -55,7 +54,6 @@ class _BookCardState extends State<BookCard> {
         favoriteBooks.any((item) => item.bookId == widget.book.bookId);
   }
 
-  // Silme işlemi için küçük bir yardımcı fonksiyon
   void _deleteAd() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -77,7 +75,7 @@ class _BookCardState extends State<BookCard> {
       final res =
           await ApiService.deleteBook(widget.book.bookId, widget.book.userId);
       if (res['status'] == 'success') {
-        widget.onUpdated?.call(); // Profil sayfasını yeniler
+        widget.onUpdated?.call(); 
       }
     }
   }
@@ -102,7 +100,6 @@ class _BookCardState extends State<BookCard> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 📘 Kitap Resmi Bölümü (Aynı kalıyor)
               Expanded(
                 child: ClipRRect(
                   borderRadius:
@@ -121,7 +118,6 @@ class _BookCardState extends State<BookCard> {
                 ),
               ),
 
-              // 📘 Kitap Bilgileri
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
@@ -154,19 +150,16 @@ class _BookCardState extends State<BookCard> {
                     ),
                     const SizedBox(height: 8),
 
-                    // 🔥 BURASI DEĞİŞTİ: Kendi ilanım mı kontrolü
                     if (widget.isMyPost)
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              // BookCard.dart içindeki ilgili kısım
                               onPressed: () async {
                                 final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => EditBookScreen(
-                                      // Burayı nesne olarak değil, Map (anahtar-değer) olarak gönderiyoruz:
                                       book: {
                                         'book_id': widget.book.bookId,
                                         'user_id': widget.book.userId,
@@ -204,15 +197,12 @@ class _BookCardState extends State<BookCard> {
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            // 1. Kitap zaten sepette mi kontrol et
                             bool isAlreadyInCart = cartBooks.any(
                                 (item) => item.bookId == widget.book.bookId);
 
                             if (!isAlreadyInCart) {
-                              // 2. Sepete ekle
                               cartBooks.add(widget.book);
 
-                              // 3. Kullanıcıya bildirim ver
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
@@ -222,7 +212,6 @@ class _BookCardState extends State<BookCard> {
                                 ),
                               );
                             } else {
-                              // 4. Uyarı ver
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text("Bu kitap zaten sepetinizde!"),
@@ -239,7 +228,7 @@ class _BookCardState extends State<BookCard> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text("Sepete Ekle", // Metni güncelledik
+                        child: const Text("Sepete Ekle", 
                             style: TextStyle(
                                 fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
@@ -249,7 +238,6 @@ class _BookCardState extends State<BookCard> {
             ],
           ),
 
-          // ❤️ FAVORİ BUTONU (Kendi ilanımızda gizledik, daha mantıklı)
           if (!widget.isMyPost)
             Positioned(
               top: 10,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart'; // Dosya yolunu kendine göre düzenle
+import '../../services/api_service.dart'; 
 
 class EditBookScreen extends StatefulWidget {
-  final dynamic book; // Map<String, dynamic> olarak gelir
+  final dynamic book; 
 
   const EditBookScreen({super.key, required this.book});
 
@@ -19,7 +19,6 @@ class _EditBookScreenState extends State<EditBookScreen> {
   @override
   void initState() {
     super.initState();
-    // Backend'den gelen verilere [] ile erişiyoruz
     titleController = TextEditingController(text: widget.book['title']?.toString() ?? "");
     priceController = TextEditingController(text: widget.book['price']?.toString() ?? "");
     descController = TextEditingController(text: widget.book['description']?.toString() ?? "");
@@ -31,7 +30,6 @@ class _EditBookScreenState extends State<EditBookScreen> {
     setState(() => isLoading = true);
 
     try {
-      // api_service.dart içindeki static metodu çağırıyoruz
       final res = await ApiService.updateBook(
         widget.book['book_id'],
         widget.book['user_id'],
@@ -46,7 +44,7 @@ class _EditBookScreenState extends State<EditBookScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("İlan başarıyla güncellendi!"), backgroundColor: Colors.green),
         );
-        Navigator.pop(context, true); // Profil sayfasına 'güncellendi' bilgisi gönderir
+        Navigator.pop(context, true); 
       }
     } catch (e) {
       if (mounted) {

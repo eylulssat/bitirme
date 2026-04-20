@@ -15,6 +15,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   // 1. VERİLERİ YAKALAMAK İÇİN CONTROLLER'LAR
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _obscurePassword = true;
   String? _selectedUniversity;
   String? _selectedDepartment;
 
@@ -40,10 +41,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     'Yönetim Bilişim Sistemleri',
     'Diğer'
   ];
+  bool _isPasswordStrong(String password) {
+  // En az 8 karakter, 1 büyük harf, 1 küçük harf ve 1 rakam
+  final regex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$');
+  return regex.hasMatch(password);
+}
 
   Future<void> _handleSignup() async {
-const String apiUrl = "http://192.168.1.29:8000/signup"; // Web'de çalıştığın için localhost kullanmalısın.
-const String apiUrl = "http://192.168.67.158:8000/signup"; // Web'de çalıştığın için localhost kullanmalısın.
+    const String apiUrl = "http://192.168.67.42:8000/signup"; 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -57,12 +62,16 @@ const String apiUrl = "http://192.168.67.158:8000/signup"; // Web'de çalıştı
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _showSnackBar("Başarılı: ${data['message']}", Colors.green);
-        Navigator.pop(context); 
+        // null mesajı yerine senin istediğin sabit yazı:
+        _showSnackBar("Üye olma işlemi başarılı!", Colors.green);
+        
+        // Kullanıcının mesajı görmesi için yarım saniye bekleyip sayfayı kapatır
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) Navigator.pop(context); 
+        });
       } else {
-        final errorData = jsonDecode(response.body);
-        _showSnackBar("Hata: ${errorData['detail']}", Colors.red);
+        // Hata durumunda da karmaşayı önlemek için basit bir mesaj:
+        _showSnackBar("Hata: Kayıt oluşturulamadı.", Colors.red);
       }
     } catch (e) {
       _showSnackBar("Bağlantı hatası: Sunucu açık mı?", Colors.orange);
@@ -150,19 +159,56 @@ const String apiUrl = "http://192.168.67.158:8000/signup"; // Web'de çalıştı
   }
 
   Widget _buildTextField(String label, IconData icon, {bool isPassword = false, required TextEditingController controller}) {
-    return TextFormField(
-      controller: controller, 
-      obscureText: isPassword,
-      validator: (v) => (v == null || v.isEmpty) ? "Bu alan gereklidir" : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: Colors.grey[50],
-      ),
-    );
+  return TextFormField(
+    controller: controller,
+    // Eğer bu bir şifre alanıysa ve _obscurePassword true ise gizle
+    obscureText: isPassword ? _obscurePassword : false, 
+    validator: (v) {
+  // 1. Önce boş olup olmadığını kontrol et (Tüm alanlar için geçerli)
+  if (v == null || v.isEmpty) {
+    return "Bu alan gereklidir";
   }
+
+  // 2. Eğer bu alan E-posta alanıysa, format kontrolü yap
+  if (label == "E-posta") {
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(v)) {
+      return "Geçerli bir e-posta adresi giriniz.";
+    }
+  }
+
+  // 3. Eğer bu alan Şifre alanıysa, güç kontrolü yap
+  if (isPassword && !_isPasswordStrong(v)) {
+    return "Şifre en az 8 karakter, bir büyük, bir küçük harf ve rakam içermelidir.";
+  }
+
+  // Her şey yolundaysa null döndür
+  return null;
+},
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      // Şifre alanına göz ikonu ekliyoruz
+      suffixIcon: isPassword 
+          ? IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                color: Colors.grey,
+              ),
+              onPressed: () {
+                // İkona basıldığında durumu tersine çeviriyoruz
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            )
+          : null,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      filled: true,
+      fillColor: Colors.grey[50],
+    ),
+  );
+}
 
   Widget _buildDropdownField(String label, IconData icon, List<String> items, Function(String?) onChanged) {
     return DropdownButtonFormField<String>(

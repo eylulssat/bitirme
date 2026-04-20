@@ -44,7 +44,7 @@ def get_db_connection():
         host="localhost",
         database="bebook",
         user="postgres",
-        password="senem2003", 
+        password="12345", 
         port="5432"
     )
 

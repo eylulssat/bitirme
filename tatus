@@ -1,0 +1,114 @@
+[33mcommit 627902bea0374bfc09ca9de616aa758d9a3cbe60[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mpayment-system[m[33m, [m[1;31morigin/payment-system[m[33m)[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Wed Apr 8 12:54:08 2026 +0300
+
+    bitmis hali
+
+[33mcommit b63e14bd17306edf311fb5cef5194768b845cef0[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Wed Apr 8 12:29:46 2026 +0300
+
+    vizeye kadar görevlerin hepsi tamamlandı
+
+[33mcommit 53c6b2b1d69a0436ead953b0dcca24f3a66723bf[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 23:08:46 2026 +0300
+
+    sadece odeme sayfasından çıktıktan sonra gelen mesaj sorunlu
+
+[33mcommit 5188353cc648023752133aa98de3f061a7778f2d[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 20:45:51 2026 +0300
+
+    sepete ekleyip ödeme yapılıyor sadece ödeme sonrası ana sayfaya dönme eksik
+
+[33mcommit 9e3f3c06738662e0e3ba4a09e76e243d75408795[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 19:35:23 2026 +0300
+
+    vizeye kadar olan görevler tam çalışır hali
+
+[33mcommit 30302b96f06f95263aad20ef6a59f130d89a9889[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 12:42:46 2026 +0300
+
+    ilan silme,ödeme,ilanlarım kısmı da calisiyor
+
+[33mcommit bb9d496431ae788f835597a00804ec1230104d18[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 10:38:28 2026 +0300
+
+    ilanlarım kısmındaki satın al butonu kaldırıldı
+
+[33mcommit 413ceeb9b1b0d818845fb1beb7b0d3dad5106d06[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 10:28:31 2026 +0300
+
+    yazar adı resim gözüküyor ilanda son hali
+
+[33mcommit aa52399fa73bbb9625df7c5bba27b3be37942958[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Tue Apr 7 10:04:38 2026 +0300
+
+    Resim upload sistemi eklendi (FastAPI + Flutter)
+
+[33mcommit 0c43f1c296f075f6ee4486da75c635a1fb23d74e[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Mon Apr 6 22:12:28 2026 +0300
+
+    feat: ilan ekleme sonrasi profil sayfasini otomatik yenileme ve state guncellemesi
+
+[33mcommit 6e14ad4cdb00f6c13933c178fdf1ce8282ee7010[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Mon Apr 6 14:16:32 2026 +0300
+
+    ilanlarim kisminda gozukuyor
+
+[33mcommit aa4aa61d8b6772dffa562046169625ee1232cc6b[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Mon Apr 6 09:43:28 2026 +0300
+
+    odemeden geri donus alınıyor.
+
+[33mcommit a6212e9775c2ac82386646e5d760ec8c562d1666[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Sun Apr 5 00:58:04 2026 +0300
+
+    ıp çakışması çözüldü
+
+[33mcommit 57f3ce78bc406ead1ff9d4e270a38900306e048f[m
+Merge: 5ac2b6b 8fbcc6a
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Sat Apr 4 21:37:54 2026 +0300
+
+    Merge branch 'main' into payment-system
+
+[33mcommit 8fbcc6a7fcf7a02f9dbe17ef74173f250ea3975f[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Sat Apr 4 10:51:09 2026 +0300
+
+    Add contact message functionality and book upload feature
+
+[33mcommit 5ac2b6b003ac9217b9353587f8eaaf25b0b46368[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Thu Apr 2 23:11:17 2026 +0300
+
+    odeme calisir hali
+
+[33mcommit e68578765f526749d89562b1b842e4f873e62330[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Sat Feb 28 13:11:13 2026 +0300
+
+    feat:odeme sistemi eklendi
+
+[33mcommit 40771895307f24f00007a42b8a46126a5af24294[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Mon Feb 23 00:52:39 2026 +0300
+
+    Kayıt ve Giriş sistemi tamamlandı, PostgreSQL ve Bcrypt entegrasyonu yapıldı
+
+[33mcommit d4dad0703c7a18577dee2a79070076828022fb87[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Mon Feb 16 17:00:54 2026 +0300
+
+    ilk commit

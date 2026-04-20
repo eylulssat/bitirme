@@ -15,8 +15,6 @@ class MainWrapper extends StatefulWidget {
 class _MainWrapperState extends State<MainWrapper> { 
   int _selectedIndex = 0;
 
-  // 🔥 1. ADIM: ProfileScreen'in içindeki fonksiyonlara erişmek için bir Key tanımlıyoruz.
-  // ProfileScreen'in State sınıfının public olması (adı başında _ olmaması) gerekebilir.
   final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 
   @override
@@ -24,16 +22,15 @@ class _MainWrapperState extends State<MainWrapper> {
     const Color primaryColor = Color(0xFF6C63FF); 
 
     final List<Widget> _pages = [
-      const HomeScreen(),                 // 0: Keşfet
-      const Center(child: Text("Arama")), // 1: Ara
-      const SizedBox(),                   // 2: Sat
-      CartScreen(onDiscoverPressed: () {  // 3: Sepetim
+      const HomeScreen(),                 
+      const Center(child: Text("Arama")), 
+      const SizedBox(),                   
+      CartScreen(onDiscoverPressed: () {  
         setState(() {
           _selectedIndex = 0;
         });
       }),
-      // 🔥 2. ADIM: Key'i buraya bağlıyoruz
-      ProfileScreen(key: _profileKey),    // 4: Profil
+      ProfileScreen(key: _profileKey),    
     ];
 
     return Scaffold(
@@ -79,12 +76,11 @@ class _MainWrapperState extends State<MainWrapper> {
                   );
 
                   if (result == true) {
-                    // 🔥 3. ADIM: Profil sayfasındaki yenileme fonksiyonunu tetikliyoruz
-                    // ProfileScreen içinde ilanları çeken fonksiyonun adının 'fetchUserBooks' olduğunu varsayıyorum.
+                    
                     _profileKey.currentState?.fetchMyBooks(); 
 
                     setState(() {
-                      _selectedIndex = 4; // Profile'a git
+                      _selectedIndex = 4; 
                     });
                   }
                 } else {

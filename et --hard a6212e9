@@ -1,0 +1,48 @@
+[33mcommit aa4aa61d8b6772dffa562046169625ee1232cc6b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mpayment-system[m[33m, [m[1;31morigin/payment-system[m[33m)[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Mon Apr 6 09:43:28 2026 +0300
+
+    odemeden geri donus alınıyor.
+
+[33mcommit a6212e9775c2ac82386646e5d760ec8c562d1666[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Sun Apr 5 00:58:04 2026 +0300
+
+    ıp çakışması çözüldü
+
+[33mcommit 57f3ce78bc406ead1ff9d4e270a38900306e048f[m
+Merge: 5ac2b6b 8fbcc6a
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Sat Apr 4 21:37:54 2026 +0300
+
+    Merge branch 'main' into payment-system
+
+[33mcommit 8fbcc6a7fcf7a02f9dbe17ef74173f250ea3975f[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Sat Apr 4 10:51:09 2026 +0300
+
+    Add contact message functionality and book upload feature
+
+[33mcommit 5ac2b6b003ac9217b9353587f8eaaf25b0b46368[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Thu Apr 2 23:11:17 2026 +0300
+
+    odeme calisir hali
+
+[33mcommit e68578765f526749d89562b1b842e4f873e62330[m
+Author: Merve <merveyilmmaz1701@gmail.com>
+Date:   Sat Feb 28 13:11:13 2026 +0300
+
+    feat:odeme sistemi eklendi
+
+[33mcommit 40771895307f24f00007a42b8a46126a5af24294[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Mon Feb 23 00:52:39 2026 +0300
+
+    Kayıt ve Giriş sistemi tamamlandı, PostgreSQL ve Bcrypt entegrasyonu yapıldı
+
+[33mcommit d4dad0703c7a18577dee2a79070076828022fb87[m
+Author: eylulssat <sateylul2@gmail.com>
+Date:   Mon Feb 16 17:00:54 2026 +0300
+
+    ilk commit

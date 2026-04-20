@@ -22,11 +22,9 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ------------------- API SERVİSİ -------------------
+
 class ApiService {
-  static const String baseUrl = "http://192.168.1.29:8000"; 
-  // Yeni IP adresin: 192.168.67.99
-  final String baseUrl = "http://192.168.67.158:8000"; 
+  static const String baseUrl = "http://192.168.67.42:8000"; 
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {
@@ -54,7 +52,7 @@ class ApiService {
   }
 }
 
-// ------------------- ÖDEME AKIŞI -------------------
+
 void makePayment(BuildContext context, int userId, int bookId, double price) async {
   final api = ApiService();
 
@@ -62,14 +60,14 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
     debugPrint("--- Ödeme Başlatılıyor ---");
     final paymentResponse = await api.createPayment(userId, bookId, price);
     
-    // Terminalden gelen veriyi kontrol etmek için:
+    
     debugPrint("Backend Yanıtı: $paymentResponse");
     
-    // Iyzico verisi bazen doğrudan gelmez, kontrolü esnek tutuyoruz
+    
     String? checkoutUrl = paymentResponse['paymentPageUrl'];
     String? orderId = paymentResponse['conversationId']?.toString();
 
-    // Eğer URL varsa WebView'ı aç
+    
     if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
       if (context.mounted) {
         debugPrint("WebView Açılıyor: $checkoutUrl");
@@ -81,10 +79,10 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
         );
       }
 
-      // WebView kapandıktan sonra (Geri tuşu veya ödeme bitişi)
+      
       if (!context.mounted) return;
 
-      // 2. ADIM: Polling (Durum Sorgulama)
+      
       bool isSuccess = false;
       if (orderId != null) {
         for (int i = 0; i < 20; i++) {
