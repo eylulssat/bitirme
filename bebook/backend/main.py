@@ -12,10 +12,10 @@ import shutil
 import uuid
 from typing import List
 
-# 1. ÖNCE APP NESNESİNİ OLUŞTUR
+
 app = FastAPI()
 
-# 2. PYDANTIC MODELLERİ
+
 class BulkPaymentRequest(BaseModel):
     user_id: int
     book_ids: List[int]
@@ -48,13 +48,13 @@ class ContactRequest(BaseModel):
     email: str
     message: str
 
-# --- 🖼️ STATİK DOSYA VE CORS AYARLARI ---
+
 UPLOAD_DIR = "uploads" 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.1.29:8000" 
+BASE_URL = "http://192.168.67.42:8000" 
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,7 +64,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- VERİTABANI BAĞLANTISI ---
+
 def get_db_connection():
     return psycopg2.connect(
         host="localhost",
@@ -74,23 +74,21 @@ def get_db_connection():
         port="5432"
     )
 
-# --- IYZICO AYARLARI ---
+
 IYZICO_OPTIONS = {
     'api_key': 'sandbox-2uvQ8EgewWnsUzYohEY9bAe9iHqZwQkB',
     'secret_key': 'sandbox-uA0wxzWZMBF4m7RKBqEf9rNtAYBWEzkr',
     'base_url': 'sandbox-api.iyzipay.com'
 }
 
-# --- 🛒 YENİ EKLENEN: TOPLU ÖDEME ROTASI ---
+
 @app.post("/bulk-payment")
 async def bulk_payment(request: BulkPaymentRequest):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         
-        # HATA ALAN KISIM BURASIYDI: 
-        # Ana tabloya (orders) kayıt atarken sepetteki ilk kitabın ID'sini veriyoruz 
-        # ki 'NOT NULL' kısıtlaması bozulmasın.
+        
         first_book_id = request.book_ids[0] if request.book_ids else None
 
         cur.execute(
@@ -100,9 +98,7 @@ async def bulk_payment(request: BulkPaymentRequest):
         order_id = cur.fetchone()[0]
         conn.commit()
 
-        # ... (İyzipay sepet hazırlama kısımları aynı kalıyor) ...
         
-        # İyzipay basket_items kısmında tüm kitapları tek tek eklemeye devam et
         basket_items = []
         for b_id in request.book_ids:
             item = {
@@ -114,9 +110,7 @@ async def bulk_payment(request: BulkPaymentRequest):
             }
             basket_items.append(item)
 
-        # İyzipay isteğini gönder...
-
-        # 3. İyzipay Form Başlatma İsteği
+       
         iyzico_request = {
             'locale': 'tr',
             'conversationId': str(order_id),
@@ -125,7 +119,7 @@ async def bulk_payment(request: BulkPaymentRequest):
             'currency': 'TRY',
             'basketId': str(order_id),
             'paymentGroup': 'PRODUCT',
-            'callbackUrl': f'{BASE_URL}/payment-callback', # Ödeme bitince döneceği adres
+            'callbackUrl': f'{BASE_URL}/payment-callback',
             'buyer': {
                 'id': str(request.user_id),
                 'name': 'Merve',
@@ -150,7 +144,7 @@ async def bulk_payment(request: BulkPaymentRequest):
         }
 
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(iyzico_request, IYZICO_OPTIONS)
-        # İyzipay'den gelen veriyi JSON olarak Flutter'a gönderiyoruz
+        
         return json.loads(checkout_form_initialize.read().decode('utf-8'))
 
     except Exception as e:
@@ -159,7 +153,7 @@ async def bulk_payment(request: BulkPaymentRequest):
     finally:
         conn.close()
 
-# --- DİĞER ENDPOINTS (Geri Kalanlar Aynı) ---
+
 
 @app.post("/signup")
 async def signup(user: UserSignup):
@@ -184,7 +178,6 @@ async def signup(user: UserSignup):
     finally:
         conn.close()
 
-# ... (Buradan sonraki /login, /books vb. tüm kodlarını altına yapıştırabilirsin)
 
 
 
@@ -225,7 +218,6 @@ async def get_all_books():
         
         result = []
         for b in books:
-            # Resim ismini tam URL'e çeviriyoruz
             image_url = f"{BASE_URL}/uploads/{b[7]}" if b[7] else None
             result.append({
                 "book_id": b[0],
@@ -246,7 +238,6 @@ async def get_my_books(user_id: int):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        # SORGUDAN SONRA 'author' alanını ekledik:
         cur.execute("""
             SELECT book_id, user_id, title, author, price, description, image_path
             FROM books
@@ -261,7 +252,7 @@ async def get_my_books(user_id: int):
                 "book_id": b[0],
                 "user_id": b[1],
                 "title": b[2],
-                "author": b[3], # Artık yazar bilgisi listede
+                "author": b[3], 
                 "price": b[4],
                 "description": b[5],
                 "image_path": image_url
@@ -270,7 +261,6 @@ async def get_my_books(user_id: int):
     finally:
         conn.close()
 
-# --- 🔥 GÜNCELLENEN: RESİM YÜKLEMELİ KİTAP EKLEME ---
 @app.post("/books")
 async def add_book(
     user_id: int = Form(...),
@@ -280,13 +270,12 @@ async def add_book(
     price: float = Form(...),
     description: str = Form(...),
     seller_email: str = Form(...),
-    file: UploadFile = File(None) # Resim dosyası buradan gelir
+    file: UploadFile = File(None) 
 ):
     conn = None
     image_name = None
     
     try:
-        # 1. Dosya varsa kaydet
         if file:
             ext = file.filename.split('.')[-1]
             image_name = f"{uuid.uuid4()}.{ext}"
@@ -295,7 +284,6 @@ async def add_book(
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-        # 2. Veritabanına sadece dosya ismini kaydet
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
@@ -327,7 +315,6 @@ async def create_payment(payment: CreatePayment):
         conn.commit()
         cur.close()
 
-        # Ortak adres objesi (Hem fatura hem teslimat için kullanabiliriz)
         address_info = {
             'contactName': 'Merve Bebook',
             'city': 'Zonguldak',
@@ -357,8 +344,8 @@ async def create_payment(payment: CreatePayment):
                 'zipCode': '67100',
                 'registrationAddress': 'Universite Caddesi No:100 Incivez'
             },
-            'shippingAddress': address_info, # 🔥 Teslimat Adresi Eklendi
-            'billingAddress': address_info,  # 🔥 Fatura Adresi Eklendi
+            'shippingAddress': address_info, 
+            'billingAddress': address_info,  
             'basketItems': [
                 {
                     'id': str(payment.book_id), 
@@ -377,27 +364,23 @@ async def create_payment(payment: CreatePayment):
 @app.post("/payment-callback")
 async def payment_callback(request: Request):
     form_data = await request.form()
-    token = form_data.get('token') # Iyzico'dan gelen tek veri bu
+    token = form_data.get('token') 
 
     if not token:
         return HTMLResponse(content="Geçersiz istek (Token yok)", status_code=400)
 
-    # 1. İyzipay'e bu token ile sonucun ne olduğunu soruyoruz
     iyzico_request = {'token': token}
     checkout_form_result = iyzipay.CheckoutForm().retrieve(iyzico_request, IYZICO_OPTIONS)
     
-    # Gelen yanıtı JSON'a çevirip kontrol edelim
     result = json.loads(checkout_form_result.read().decode('utf-8'))
     
-    # Debug için terminale detayları yazdıralım
     print("--- IYZICO SORGULAMA SONUCU ---")
     print(json.dumps(result, indent=2))
 
-    payment_status = result.get('paymentStatus') # 'SUCCESS' veya 'FAILURE' döner
-    order_id = result.get('conversationId')      # Veritabanındaki order_id
+    payment_status = result.get('paymentStatus') 
+    order_id = result.get('conversationId')      
 
     if payment_status == 'SUCCESS':
-        # 2. Veritabanını Güncelle
         try:
             conn = get_db_connection()
             cur = conn.cursor()
@@ -417,8 +400,7 @@ async def payment_callback(request: Request):
         error_msg = result.get('errorMessage', 'Ödeme onaylanmadı.')
         description = f"Sorun oluştu: {error_msg}"
 
-    # HTML içeriği (Aynı kalabilir)
-    # HTML içeriği (Mobil uyumlu hale getirildi)
+    
     html_content = f"""
     <!DOCTYPE html>
     <html lang="tr">
@@ -476,7 +458,6 @@ async def delete_book(book_id: int, user_id: int):
 
 @app.post("/contact")
 async def contact(req: ContactRequest):
-    # İletişim mesajlarını buraya kaydedebilir veya e-posta atabilirsin.
     return {"status": "success", "message": "Mesajınız iletildi."}
 @app.get("/order-status/{order_id}")
 async def get_order_status(order_id: int):
