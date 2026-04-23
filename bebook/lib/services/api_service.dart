@@ -216,4 +216,59 @@ class ApiService {
       return false;
     }
   }
+  static Future<Map<String, dynamic>> sendOtp(String email) async {
+  try {
+    final response = await http.post(
+      Uri.parse("$baseUrl/forgot-password"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {"status": "error", "message": e.toString()};
+  }
+}
+static Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/verify-otp"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "otp": otp,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Sunucu hatası: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Bağlantı hatası: $e"};
+    }
+  }
+  static Future<Map<String, dynamic>> resetPassword(String email, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/reset-password"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "password": password,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        // Sunucudan hata kodu dönerse (örn: 400, 500)
+        final errorBody = jsonDecode(response.body);
+        return {"status": "error", "message": errorBody['message'] ?? "Sunucu hatası"};
+      }
+    } catch (e) {
+      // İnternet yoksa veya sunucuya hiç ulaşılamıyorsa
+      return {"status": "error", "message": "Bağlantı hatası: $e"};
+    }
+  }
 }

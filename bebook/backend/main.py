@@ -11,6 +11,13 @@ import os
 import shutil
 import uuid
 from typing import List
+import smtplib
+import random
+import string
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import bcrypt
+otp_storage = {}
 
 app = FastAPI()
 
@@ -310,3 +317,142 @@ async def get_order_status(order_id: int):
 @app.post("/contact")
 async def contact(req: ContactRequest):
     return {"status": "success", "message": "Mesajınız iletildi."}
+# Rastgele 6 haneli kod üretme
+def generate_otp():
+    # random.choices olarak kullanman daha güvenlidir
+    return ''.join(random.choices(string.digits, k=6))
+# SADECE BU KALSIN, DİĞER FORGOT-PASSWORD'LARI SİL
+@app.post("/forgot-password")
+async def forgot_password(data: dict):
+    try:
+        email = data.get("email")
+        if not email:
+            return {"status": "error", "message": "Email adresi eksik"}
+            
+        # 1. Kod üret
+        otp = generate_otp()
+        
+        # 2. Kodu hafızaya kaydet (Verify aşaması için)
+        otp_storage[email] = otp 
+        
+        print(f"Email: {email}, OTP: {otp}") # Terminalden takip et
+        
+        # 3. GERÇEK Mail gönderme fonksiyonunu çağır
+        success = send_otp_email(email, otp) 
+        
+        if success:
+            return {"status": "success", "message": "Kod gönderildi"}
+        else:
+            return {"status": "error", "message": "Mail gönderimi başarısız. Lütfen terminali kontrol edin."}
+            
+    except Exception as e:
+        print(f"Sistem Hatası: {str(e)}")
+        return {"status": "error", "message": str(e)}
+    
+    #bhib ibgw lyjd rtsf
+
+# E-posta gönderme fonksiyonu
+# 1. Önce yardımcı fonksiyon kalsın
+def generate_otp():
+    return ''.join(random.choices(string.digits, k=6))
+
+# 2. Mail gönderme fonksiyonu (Burası doğru)
+def send_otp_email(receiver_email, otp_code):
+    sender_email = "merveyilmazz0703@gmail.com" 
+    password = "bhib ibgw lyjd rtsf" 
+    
+    subject = "BEBOOK Dogrulama Kodu"
+    body = f"Merhaba,\n\nSifrenizi sifirlamak icin kullanmaniz gereken kod: {otp_code}"
+    email_text = f"Subject: {subject}\n\n{body}"
+    
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, password.replace(" ", ""))
+        server.sendmail(sender_email, receiver_email, email_text.encode('utf-8'))
+        server.quit()
+        print(f"!!! DOĞRULAMA KODU GÖNDERİLDİ: {otp_code} !!!")
+        return True
+    except Exception as e:
+        print(f"MAİL HATASI: {e}")
+        return False
+
+# 3. TEK BİR endpoint olarak forgot-password (Bunu kullan, diğerlerini sil)
+@app.post("/forgot-password")
+async def forgot_password(data: dict):
+    try:
+        email = data.get("email")
+        if not email:
+            return {"status": "error", "message": "Email adresi eksik"}
+            
+        otp = generate_otp()
+        
+        # BU SATIR ÇOK ÖNEMLİ: Kodu hafızaya alıyoruz ki verify-otp çalışabilsin
+        otp_storage[email] = otp 
+        
+        print(f"Email: {email}, OTP: {otp}") 
+        
+        success = send_otp_email(email, otp) 
+        
+        if success:
+            return {"status": "success", "message": "Kod gönderildi"}
+        else:
+            return {"status": "error", "message": "Mail gönderimi başarısız"}
+            
+    except Exception as e:
+        print(f"Sistem Hatası: {str(e)}")
+        return {"status": "error", "message": str(e)}
+@app.post("/verify-otp")
+async def verify_otp(data: dict):
+    # Terminale bu yazı düşecek mi bakacağız
+    print("!!! DOĞRULAMA İSTEĞİ GELDİ !!!")
+    print(f"Gelen Veri: {data}")
+    
+    email = str(data.get("email")).strip().lower()
+    user_otp = str(data.get("otp")).strip()
+
+    # Eğer e-posta hafızada varsa ve kod doğruysa direkt onay ver
+    if email in otp_storage and str(otp_storage[email]) == user_otp:
+        return {"status": "success", "message": "Kod doğrulandı"}
+    
+    # Hata durumunda terminale detay yazdıralım
+    print(f"Hata detayı -> Hafızadaki: {otp_storage.get(email)}, Girilen: {user_otp}")
+    return {"status": "error", "message": "Kod eşleşmedi!"}
+
+
+@app.post("/reset-password")
+async def reset_password(data: dict):
+    conn = None
+    try:
+        email = str(data.get("email")).strip().lower()
+        new_password = data.get("password")
+
+        # 1. Şifreyi Bcrypt ile şifreliyoruz (Hashleme)
+        # Login fonksiyonunun okuyabileceği formata getiriyoruz
+        hashed_password = bcrypt.hashpw(
+            new_password.encode('utf-8'), 
+            bcrypt.gensalt()
+        ).decode('utf-8')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 2. SQL Sorgusu (password_hash sütununa şifrelenmiş halini yazıyoruz)
+        query = 'UPDATE users SET password_hash = %s WHERE email = %s'
+        
+        cursor.execute(query, (hashed_password, email))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return {"status": "error", "message": "Kullanıcı bulunamadı."}
+
+        cursor.close()
+        print(f"BAŞARILI: {email} şifresi şifrelenerek güncellendi.")
+        return {"status": "success", "message": "Şifreniz başarıyla güncellendi."}
+
+    except Exception as e:
+        print(f"Sıfırlama Hatası: {e}")
+        return {"status": "error", "message": "Sistem hatası oluştu."}
+    finally:
+        if conn:
+            conn.close()
