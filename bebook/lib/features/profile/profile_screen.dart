@@ -24,7 +24,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  final String baseUrl = "http://192.168.67.42:8000/uploads/";
+  //final String baseUrl = "http://192.168.67.75:8000/uploads/";
 
   @override
   void initState() {
@@ -34,12 +34,16 @@ class ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // ProfileScreenState içindeki fetchMyBooks fonksiyonunu şu şekilde güncelle:
+
   Future<void> fetchMyBooks() async {
     if (userId == null) return;
     setState(() => isLoading = true);
 
     try {
       final data = await ApiService.getMyBooks(userId!);
+
+      // fetchMyBooks fonksiyonunun içindeki setState kısmını şununla değiştir:
 
       setState(() {
         myBooks = data.map<Book>((b) {
@@ -49,8 +53,17 @@ class ProfileScreenState extends State<ProfileScreen> {
           if (rawPath.isNotEmpty) {
             if (rawPath.startsWith('http')) {
               finalImageUrl = rawPath;
+            }
+            // 500 yerine 200 karakter kontrolü daha garantidir (Base64 verileri binlerce karakterdir)
+            else if (rawPath.length > 200 || rawPath.contains(';base64,')) {
+              finalImageUrl = "https://via.placeholder.com/150";
+              debugPrint(
+                  "UYARI: Bozuk veri (Base64) algılandı, placeholder gösteriliyor.");
             } else {
-              finalImageUrl = "$baseUrl$rawPath";
+              // Normal dosya adı ise birleştirme yap
+              String cleanFileName =
+                  rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
+              finalImageUrl = "${ApiService.baseUrl}/uploads/$cleanFileName";
             }
           }
 
@@ -225,7 +238,9 @@ class ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 17)),
                       const SizedBox(height: 4),
-                      Text(userUniversity ?? "Zonguldak Bülent Ecevit Üniversitesi",
+                      Text(
+                          userUniversity ??
+                              "Zonguldak Bülent Ecevit Üniversitesi",
                           style: const TextStyle(
                               color: Colors.grey, fontSize: 14)),
                     ],
@@ -279,7 +294,7 @@ class ProfileScreenState extends State<ProfileScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder( 
+      builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
           height: MediaQuery.of(context).size.height * 0.75,
           decoration: const BoxDecoration(
@@ -298,7 +313,8 @@ class ProfileScreenState extends State<ProfileScreen> {
               const Padding(
                 padding: EdgeInsets.all(20.0),
                 child: Text("İlanlarım",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
               Expanded(
                 child: isLoading
@@ -314,14 +330,14 @@ class ProfileScreenState extends State<ProfileScreen> {
                               crossAxisCount: 2,
                               crossAxisSpacing: 15,
                               mainAxisSpacing: 15,
-                              childAspectRatio: 0.65, 
+                              childAspectRatio: 0.65,
                             ),
                             itemBuilder: (context, index) => BookCard(
                               book: myBooks[index],
-                              isMyPost: true, 
+                              isMyPost: true,
                               onUpdated: () {
-                                fetchMyBooks(); 
-                                Navigator.pop(context); 
+                                fetchMyBooks();
+                                Navigator.pop(context);
                               },
                             ),
                           ),

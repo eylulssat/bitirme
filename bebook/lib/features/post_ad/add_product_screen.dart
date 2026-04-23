@@ -28,7 +28,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _mailController = TextEditingController();
-  
+
   bool isUserLoggedIn = true;
   bool _isLoading = false;
 
@@ -92,7 +92,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       var request = http.MultipartRequest(
         "POST",
-        Uri.parse("http://192.168.1.11:8001/scan"),
+        Uri.parse("http://192.168.67.75:8001/scan"),
       );
       request.files.add(
         http.MultipartFile.fromBytes("image", imageBytes, filename: fileName),
@@ -123,7 +123,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
         title: const Text("Giriş Gerekli"),
         content: const Text("İlan vermek için lütfen giriş yapın."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Tamam"))
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Tamam"))
         ],
       ),
     );
@@ -134,7 +136,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text("Kitap Sat", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: const Text("Kitap Sat",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -144,35 +147,61 @@ class _AddProductScreenState extends State<AddProductScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Kitabını Hızlıca Listele 📚", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text("Kitabını Hızlıca Listele 📚",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 30),
             _buildAIButton(),
             const SizedBox(height: 40),
             _buildDivider("veya manuel"),
             const SizedBox(height: 30),
-            _buildInput(label: "Kitap Adı *", icon: Icons.book_outlined, controller: _nameController),
+            _buildInput(
+                label: "Kitap Adı *",
+                icon: Icons.book_outlined,
+                controller: _nameController),
             const SizedBox(height: 15),
-            _buildInput(label: "Yazar *", icon: Icons.person_outline, controller: _authorController),
+            _buildInput(
+                label: "Yazar *",
+                icon: Icons.person_outline,
+                controller: _authorController),
             const SizedBox(height: 15),
-            _buildInput(label: "Tür", icon: Icons.category_outlined, controller: _typeController),
+            _buildInput(
+                label: "Tür",
+                icon: Icons.category_outlined,
+                controller: _typeController),
             const SizedBox(height: 15),
-            _buildInput(label: "Yayınevi", icon: Icons.business_outlined, controller: _publisherController),
+            _buildInput(
+                label: "Yayınevi",
+                icon: Icons.business_outlined,
+                controller: _publisherController),
             const SizedBox(height: 15),
-            _buildInput(label: "Fiyat (TL) *", icon: Icons.sell_outlined, isNumber: true, controller: _priceController),
+            _buildInput(
+                label: "Fiyat (TL) *",
+                icon: Icons.sell_outlined,
+                isNumber: true,
+                controller: _priceController),
             const SizedBox(height: 15),
-            _buildInput(label: "Açıklama", icon: Icons.description_outlined, controller: _descController),
+            _buildInput(
+                label: "Açıklama",
+                icon: Icons.description_outlined,
+                controller: _descController),
             const SizedBox(height: 15),
-            _buildInput(label: "İletişim Maili *", icon: Icons.contact_mail_outlined, controller: _mailController),
+            _buildInput(
+                label: "İletişim Maili *",
+                icon: Icons.contact_mail_outlined,
+                controller: _mailController),
             const SizedBox(height: 30),
-            const Text("Fotoğraf Ekle", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text("Fotoğraf Ekle",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
             SizedBox(
               height: 100,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _selectedImages.length + (_selectedImages.length < 5 ? 1 : 0),
+                itemCount: _selectedImages.length +
+                    (_selectedImages.length < 5 ? 1 : 0),
                 itemBuilder: (context, index) {
-                  if (index == _selectedImages.length) return _buildAddPhotoButton();
+                  if (index == _selectedImages.length)
+                    return _buildAddPhotoButton();
                   return _buildImageThumbnail(index);
                 },
               ),
@@ -192,16 +221,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 40),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
+          gradient: const LinearGradient(
+              colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
           borderRadius: BorderRadius.circular(20),
         ),
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white))
             : const Column(
                 children: [
-                  Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 50),
+                  Icon(Icons.qr_code_scanner_rounded,
+                      color: Colors.white, size: 50),
                   SizedBox(height: 15),
-                  Text("ISBN Barkodunu Tara", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text("ISBN Barkodunu Tara",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18)),
                 ],
               ),
       ),
@@ -209,64 +245,83 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: () async {
-          if (!isUserLoggedIn) {
-            showLoginAlert(context);
-            return;
-          }
-          if (_nameController.text.isEmpty || _authorController.text.isEmpty || _priceController.text.isEmpty || _mailController.text.isEmpty) {
-            _showSnackBar("Lütfen yıldızlı (*) alanları doldurun!", Colors.orange);
-            return;
-          }
-          double? priceValue = double.tryParse(_priceController.text);
-          if (priceValue == null) {
-            _showSnackBar("Geçerli bir fiyat giriniz!", Colors.orange);
-            return;
-          }
+  return SizedBox(
+    width: double.infinity,
+    height: 55,
+    child: ElevatedButton(
+      onPressed: () async {
+        if (!isUserLoggedIn) {
+          showLoginAlert(context);
+          return;
+        }
+        if (_nameController.text.isEmpty ||
+            _authorController.text.isEmpty ||
+            _priceController.text.isEmpty ||
+            _mailController.text.isEmpty) {
+          _showSnackBar("Lütfen yıldızlı (*) alanları doldurun!", Colors.orange);
+          return;
+        }
+        double? priceValue = double.tryParse(_priceController.text);
+        if (priceValue == null) {
+          _showSnackBar("Geçerli bir fiyat giriniz!", Colors.orange);
+          return;
+        }
 
-          bool success = await ApiService.uploadBook(
-            userId: widget.userId ?? 4,
-            title: _nameController.text.trim(),
-            author: _authorController.text.trim(),
-            category: _typeController.text.trim(),
-            price: priceValue,
-            description: _descController.text.trim(),
-            sellerEmail: _mailController.text.trim(),
-            imagePath: _selectedImages.isNotEmpty ? _selectedImages[0].path : "",
-          );
+        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
+        String imagePathToSend = ""; 
+        if (_selectedImages.isNotEmpty) {
+          // Base64 metne çevirmek yerine doğrudan dosya yolunu alıyoruz
+          imagePathToSend = _selectedImages[0].path; 
+        }
 
-          if (success) {
-            _showSnackBar("İlan başarıyla yayınlandı!", Colors.green);
-            Navigator.pop(context, true);
-          } else {
-            _showSnackBar("Hata: İlan yayınlanamadı.", Colors.red);
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6C63FF),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: const Text("İlanı Yayınla", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        bool success = await ApiService.uploadBook(
+          userId: widget.userId ?? 4,
+          title: _nameController.text.trim(),
+          author: _authorController.text.trim(),
+          category: _typeController.text.trim(),
+          price: priceValue,
+          description: _descController.text.trim(),
+          sellerEmail: _mailController.text.trim(),
+          imagePath: imagePathToSend, // Artık Base64 değil, gerçek yol gidiyor
+        );
+        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
+
+        if (success) {
+          _showSnackBar("İlan başarıyla yayınlandı!", Colors.green);
+          Navigator.pop(context, true);
+        } else {
+          _showSnackBar("Hata: İlan yayınlanamadı.", Colors.red);
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF6C63FF),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
-    );
-  }
+      child: const Text("İlanı Yayınla",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    ),
+  );
+}
 
-  Widget _buildInput({required String label, required IconData icon, bool isNumber = false, TextEditingController? controller}) {
+  Widget _buildInput(
+      {required String label,
+      required IconData icon,
+      bool isNumber = false,
+      TextEditingController? controller}) {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
+      inputFormatters:
+          isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none),
       ),
     );
   }
@@ -275,7 +330,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return Row(
       children: [
         const Expanded(child: Divider()),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text(text)),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(text)),
         const Expanded(child: Divider()),
       ],
     );
@@ -292,7 +349,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: const Color(0xFF6C63FF)),
         ),
-        child: const Icon(Icons.add_a_photo_outlined, color: Color(0xFF6C63FF), size: 30),
+        child: const Icon(Icons.add_a_photo_outlined,
+            color: Color(0xFF6C63FF), size: 30),
       ),
     );
   }
@@ -305,7 +363,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           margin: const EdgeInsets.only(right: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
-            image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
+            image: DecorationImage(
+                image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
           ),
         ),
         Positioned(
@@ -313,7 +372,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
           top: 5,
           child: GestureDetector(
             onTap: () => setState(() => _selectedImages.removeAt(index)),
-            child: const CircleAvatar(backgroundColor: Colors.red, radius: 12, child: Icon(Icons.close, size: 16, color: Colors.white)),
+            child: const CircleAvatar(
+                backgroundColor: Colors.red,
+                radius: 12,
+                child: Icon(Icons.close, size: 16, color: Colors.white)),
           ),
         ),
       ],
@@ -322,6 +384,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   void _showSnackBar(String msg, Color color) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 }

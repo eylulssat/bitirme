@@ -16,8 +16,8 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   bool _isWaitingForPayment = false;
-  bool _isAgreedToTerms = false; 
-  int? lastOrderId; 
+  bool _isAgreedToTerms = false;
+  int? lastOrderId;
 
   @override
   void initState() {
@@ -36,14 +36,14 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
-      final statusResult = await ApiService.getOrderStatus(lastOrderId); 
+      final statusResult = await ApiService.getOrderStatus(lastOrderId);
 
       if (statusResult['status'] == 'SUCCESS') {
         setState(() {
-          cartBooks.clear(); 
+          cartBooks.clear();
           _isWaitingForPayment = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Sipariş işleminiz tamamlandı."),
@@ -52,7 +52,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         );
       } else {
         setState(() {
-          _isWaitingForPayment = false; 
+          _isWaitingForPayment = false;
         });
       }
     }
@@ -73,15 +73,16 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         title: const Text("li Satış Sözleşmesi"),
         content: const SingleChildScrollView(
           child: Text(
-            "1. TARAFLAR: İşbu sözleşme BEBOOK üzerinden alışveriş yapan kullanıcı ile satıcı arasındadır.\n\n"
-            "2. KONU: Alıcının satıcıya ait web sitesi üzerinden elektronik ortamda siparişini verdiği ürünün satışı ve teslimi ile ilgili hak ve yükümlülükleri kapsar.\n\n"
-            "3. TESLİMAT: Ürün, alıcının belirttiği adrese güvenli bir şekilde gönderilecektir.\n\n"
-            "4. CAYMA HAKKI: Dijital içeriklerde ve özel basımlarda cayma hakkı sınırlıdır.\n\n"
-            "Bu metin BEBOOK projesi kapsamında test amaçlı oluşturulmuştur."
-          ),
+              "1. TARAFLAR: İşbu sözleşme BEBOOK üzerinden alışveriş yapan kullanıcı ile satıcı arasındadır.\n\n"
+              "2. KONU: Alıcının satıcıya ait web sitesi üzerinden elektronik ortamda siparişini verdiği ürünün satışı ve teslimi ile ilgili hak ve yükümlülükleri kapsar.\n\n"
+              "3. TESLİMAT: Ürün, alıcının belirttiği adrese güvenli bir şekilde gönderilecektir.\n\n"
+              "4. CAYMA HAKKI: Dijital içeriklerde ve özel basımlarda cayma hakkı sınırlıdır.\n\n"
+              "Bu metin BEBOOK projesi kapsamında test amaçlı oluşturulmuştur."),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Anladım")),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Anladım")),
         ],
       ),
     );
@@ -90,15 +91,17 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   void _completePayment(Color primaryColor) async {
     if (cartBooks.isEmpty) return;
 
-    _isAgreedToTerms = false; 
+    _isAgreedToTerms = false;
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( 
+      builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text("Teslimat Bilgileri", style: TextStyle(fontWeight: FontWeight.bold)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("Teslimat Bilgileri",
+                style: TextStyle(fontWeight: FontWeight.bold)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -136,7 +139,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                           onTap: _showTermsDialog,
                           child: const Text(
                             "Mesafeli Satış Sözleşmesi'ni okudum, onaylıyorum.",
-                            style: TextStyle(fontSize: 12, decoration: TextDecoration.underline),
+                            style: TextStyle(
+                                fontSize: 12,
+                                decoration: TextDecoration.underline),
                           ),
                         ),
                       ),
@@ -146,22 +151,30 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("İptal")),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isAgreedToTerms ? primaryColor : Colors.grey,
+                  backgroundColor:
+                      _isAgreedToTerms ? primaryColor : Colors.grey,
                 ),
-                onPressed: _isAgreedToTerms ? () {
-                  if (_nameController.text.isNotEmpty && _addressController.text.isNotEmpty) {
-                    Navigator.pop(context);
-                    _processPaymentRequest(primaryColor);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Lütfen tüm alanları doldurun.")),
-                    );
-                  }
-                } : null, 
-                child: const Text("Ödemeye Geç", style: TextStyle(color: Colors.white)),
+                onPressed: _isAgreedToTerms
+                    ? () {
+                        if (_nameController.text.isNotEmpty &&
+                            _addressController.text.isNotEmpty) {
+                          Navigator.pop(context);
+                          _processPaymentRequest(primaryColor);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("Lütfen tüm alanları doldurun.")),
+                          );
+                        }
+                      }
+                    : null,
+                child: const Text("Ödemeye Geç",
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -171,7 +184,8 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   }
 
   void _processPaymentRequest(Color primaryColor) async {
-    List<int> ids = cartBooks.map((b) => int.parse(b.bookId.toString())).toList();
+    List<int> ids =
+        cartBooks.map((b) => int.parse(b.bookId.toString())).toList();
     double total = _calculateTotal();
 
     showDialog(
@@ -185,25 +199,25 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         userId: 4,
         bookIds: ids,
         totalPrice: total,
-        
       );
 
       if (!mounted) return;
       Navigator.pop(context);
 
-      if (result['status'] == 'success' || result['status'] == 'None') { 
+      if (result['status'] == 'success' || result['status'] == 'None') {
         lastOrderId = result['orderId'];
         String? paymentUrl = result['paymentPageUrl'];
 
         if (paymentUrl != null && paymentUrl.isNotEmpty) {
           final Uri url = Uri.parse(paymentUrl);
-          _isWaitingForPayment = true; 
+          _isWaitingForPayment = true;
           await launchUrl(url, mode: LaunchMode.externalApplication);
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Hata: ${result['errorMessage'] ?? result['message']}"),
+            content:
+                Text("Hata: ${result['errorMessage'] ?? result['message']}"),
             backgroundColor: Colors.red,
           ),
         );
@@ -221,12 +235,15 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Sepetim", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text("Sepetim",
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
       ),
-      body: cartBooks.isEmpty ? _buildEmptyState(primaryColor) : _buildCartItems(primaryColor),
+      body: cartBooks.isEmpty
+          ? _buildEmptyState(primaryColor)
+          : _buildCartItems(primaryColor),
     );
   }
 
@@ -239,7 +256,8 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
           children: [
             Icon(Icons.shopping_cart_outlined, size: 100, color: primaryColor),
             const SizedBox(height: 30),
-            const Text("Sepetiniz henüz boş", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text("Sepetiniz henüz boş",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
             SizedBox(
               width: 200,
@@ -248,9 +266,12 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                 onPressed: widget.onDiscoverPressed,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25)),
                 ),
-                child: const Text("Kitap Keşfet", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text("Kitap Keşfet",
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -271,19 +292,31 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
               return Card(
                 margin: const EdgeInsets.only(bottom: 15),
                 elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(10),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      book.imageUrl ?? "https://via.placeholder.com/150",
-                      width: 50, height: 70, fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.book, size: 40),
+                      // Eğer veri zaten bir http adresiyle başlıyorsa (ISBN'den gelmişse) olduğu gibi kullan,
+                      // Eğer sadece dosya adıysa başına backend adresini ekle:
+                      (book.imageUrl != null &&
+                              book.imageUrl!.startsWith('http'))
+                          ? book.imageUrl!
+                          : "http://192.168.67.75:8000/uploads/${book.imageUrl}",
+                      width: 50,
+                      height: 70,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.book, size: 40),
                     ),
                   ),
-                  title: Text(book.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("${book.price} TL", style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
+                  title: Text(book.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("${book.price} TL",
+                      style: TextStyle(
+                          color: primaryColor, fontWeight: FontWeight.bold)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
                     onPressed: () {
@@ -307,7 +340,12 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5))
+        ],
       ),
       child: SafeArea(
         child: Column(
@@ -316,8 +354,14 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Toplam Tutar", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                Text("${_calculateTotal().toStringAsFixed(2)} TL", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
+                const Text("Toplam Tutar",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                Text("${_calculateTotal().toStringAsFixed(2)} TL",
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor)),
               ],
             ),
             const SizedBox(height: 20),
@@ -328,9 +372,14 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                 onPressed: () => _completePayment(primaryColor),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
                 ),
-                child: const Text("ÖDEMEYİ TAMAMLA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text("ÖDEMEYİ TAMAMLA",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
           ],
