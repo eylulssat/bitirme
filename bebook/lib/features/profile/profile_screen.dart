@@ -24,7 +24,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  //final String baseUrl = "http://192.168.67.75:8000/uploads/";
+  //final String baseUrl = "http://192.168.67.71:8000/uploads/";
 
   @override
   void initState() {

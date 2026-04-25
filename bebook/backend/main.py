@@ -27,7 +27,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.67.75:8000" 
+BASE_URL = "http://192.168.67.71:8000" 
 
 app.add_middleware(
     CORSMiddleware,

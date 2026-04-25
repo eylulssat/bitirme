@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 class ApiService {
   // Sadece senin çalışan güncel IP adresini bıraktık
-  static const String baseUrl = "http://192.168.67.75:8000";
+  static const String baseUrl = "http://192.168.67.71:8000";
 
   // --- GİRİŞ VE KAYIT İŞLEMLERİ ---
   static Future<Map<String, dynamic>?> login(String email, String password) async {

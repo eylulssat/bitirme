@@ -1,8 +1,24 @@
 import 'package:flutter/material.dart';
 import '../../widgets/book_card.dart';
+import '../../services/api_service.dart'; // ApiService eklendi
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Veritabanından gelecek kitapların tutulacağı liste
+  late Future<List<dynamic>> _booksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sayfa açıldığında kitapları getirmesi için fonksiyonu tetikliyoruz
+    _booksFuture = ApiService.fetchBooks();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,29 +54,50 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
-          // Kitap Listesi (Grid)
+          // Kitap Listesi (Dinamik Grid)
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, // Yan yana 2 kitap
-                crossAxisSpacing: 15,
-                mainAxisSpacing: 15,
-                childAspectRatio: 0.75,
-              ),
-              itemBuilder: (context, index) {
-                return BookCard(
-                  book: Book(
-                    bookId: index,
-                    userId: 2,
-                    title: "Algoritma Analizi",
-                    author: "Thomas H. Cormen",
-                    price: "250",
-                    imageUrl:
-                        "https://m.media-amazon.com/images/I/41T5H8u7fUL._AC_UF1000,1000_QL80_.jpg",
-                    university: "BEÜ",
-                    description: "Algoritma kitabı",
+            child: FutureBuilder<List<dynamic>>(
+              future: _booksFuture,
+              builder: (context, snapshot) {
+                // Veri yüklenirken dönen çember göster
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } 
+                // Hata oluşursa mesaj göster
+                else if (snapshot.hasError) {
+                  return Center(child: Text("Hata: ${snapshot.error}"));
+                } 
+                // Veri boşsa veya gelmediyse
+                else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text("Henüz hiç ilan bulunamadı."));
+                }
+
+                // Veri başarıyla geldiyse listeyi oluştur
+                final books = snapshot.data!;
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 15,
+                    mainAxisSpacing: 15,
+                    childAspectRatio: 0.75,
                   ),
+                  itemCount: books.length,
+                  itemBuilder: (context, index) {
+                    final bookData = books[index];
+                    return BookCard(
+                      book: Book(
+                        bookId: bookData['id'] ?? index,
+                        userId: bookData['user_id'] ?? 0,
+                        title: bookData['title'] ?? "Başlıksız",
+                        author: bookData['author'] ?? "Yazar Belirtilmemiş",
+                        price: bookData['price']?.toString() ?? "0",
+                        imageUrl: bookData['image_path'] ?? "https://via.placeholder.com/150",
+                        university: bookData['university'] ?? "BEÜ",
+                        description: bookData['description'] ?? "",
+                      ),
+                    );
+                  },
                 );
               },
             ),

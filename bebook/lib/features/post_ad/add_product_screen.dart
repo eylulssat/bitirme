@@ -92,7 +92,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       var request = http.MultipartRequest(
         "POST",
-        Uri.parse("http://192.168.67.75:8001/scan"),
+        Uri.parse("http://192.168.67.71:8001/scan"),
       );
       request.files.add(
         http.MultipartFile.fromBytes("image", imageBytes, filename: fileName),
