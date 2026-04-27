@@ -36,6 +36,7 @@ dependencies:
   http: ^1.2.1          # tek ve güncel versiyon         # Senin dosyanla güncellendi
   url_launcher: ^6.2.1
   webview_flutter: ^4.4.2
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

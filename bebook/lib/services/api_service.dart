@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 class ApiService {
   // Sadece senin çalışan güncel IP adresini bıraktık
-  static const String baseUrl = "http://192.168.67.71:8000";
+  static const String baseUrl = "http://192.168.67.118:8000";
 
   // --- GİRİŞ VE KAYIT İŞLEMLERİ ---
   static Future<Map<String, dynamic>?> login(String email, String password) async {
@@ -271,4 +271,15 @@ static Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
       return {"status": "error", "message": "Bağlantı hatası: $e"};
     }
   }
+  static Future<bool> uploadProfilePhoto(int userId, File imageFile) async {
+  var request = http.MultipartRequest(
+    'POST',
+    Uri.parse('$baseUrl/user/upload_profile_photo/$userId'),
+  );
+  
+  request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+  
+  var response = await request.send();
+  return response.statusCode == 200;
+}
 }

@@ -17,17 +17,23 @@ import string
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import bcrypt
+from datetime import datetime
+from fastapi import UploadFile, File
+
 otp_storage = {}
 
 app = FastAPI()
+from fastapi.staticfiles import StaticFiles
 
+# directory kısmına "uploads/profiles" yazıyoruz
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # --- AYARLAR VE KLASÖRLER ---
 UPLOAD_DIR = "uploads" 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.67.71:8000" 
+BASE_URL = "http://192.168.67.118:8000" 
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +66,7 @@ class UserSignup(BaseModel):
     password: str
     university: str
     department: str
+    profile_image_path: str | None = None
 
 class UserLogin(BaseModel):
     email: str
@@ -116,20 +123,24 @@ async def login(user: UserLogin):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT user_id, password_hash, university, department FROM public.users WHERE email = %s", (user.email,))
+        # 1. Sorguya profile_image_path sütununu ekledik
+        cur.execute("SELECT user_id, password_hash, university, department, profile_image_path FROM public.users WHERE email = %s", (user.email,))
         result = cur.fetchone()
 
         if not result:
             raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
 
-        user_id, stored_hash, university, department = result
+        # 2. Sonucu yeni değişkene parçalıyoruz
+        user_id, stored_hash, university, department, profile_image_path = result
+        
         if bcrypt.checkpw(user.password.encode('utf-8')[:72], stored_hash.encode('utf-8')):
             return {
                 "status": "success",
                 "user_id": user_id,
                 "user_email": user.email,
                 "university": university,
-                "department": department
+                "department": department,
+                "profile_image_path": profile_image_path  # 3. Flutter'a bu bilgiyi gönderiyoruz
             }
         else:
             raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı.")
@@ -456,3 +467,176 @@ async def reset_password(data: dict):
     finally:
         if conn:
             conn.close()
+
+    # Mesaj göndermek için gerekli veri modeli
+class MessageCreate(BaseModel):
+    sender_id: int
+    receiver_id: int
+    book_id: int
+    message_text: str
+
+@app.post("/messages/send")
+async def send_user_message(msg: MessageCreate):
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        query = """
+        INSERT INTO usermessages (sender_id, receiver_id, book_id, message_text)
+        VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query, (msg.sender_id, msg.receiver_id, msg.book_id, msg.message_text))
+        conn.commit()
+        return {"status": "success", "message": "Mesaj başarıyla kaydedildi"}
+    except Exception as e:
+        print(f"Mesaj gönderme hatası: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+# 2. İKİ KİŞİ ARASINDAKİ MESAJLARI GETİRME (GET - Sohbet Detayı)
+@app.get("/messages/{sender_id}/{receiver_id}/{book_id}")
+async def get_messages(sender_id: int, receiver_id: int, book_id: int):
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        # SQL sorgusuna 'is_read' bilgisini de ekledik (Mavi tik için)
+        query = """
+        SELECT sender_id, receiver_id, message_text, created_at, is_read 
+        FROM usermessages 
+        WHERE ((sender_id = %s AND receiver_id = %s) 
+           OR (sender_id = %s AND receiver_id = %s))
+           AND book_id = %s
+        ORDER BY created_at ASC
+        """
+        cursor.execute(query, (sender_id, receiver_id, receiver_id, sender_id, book_id))
+        rows = cursor.fetchall()
+        
+        chat_history = []
+        for row in rows:
+            chat_history.append({
+                "sender_id": row[0],
+                "receiver_id": row[1],
+                "message_text": row[2],  # Flutter'daki ChatMessage modeliyle tam uyumlu
+                "created_at": row[3].isoformat() if row[3] else None, 
+                "is_read": row[4] if len(row) > 4 else False
+            })
+        return chat_history
+    except Exception as e:
+        print(f"Mesaj çekme hatası: {e}")
+        return [] 
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+# 3. KULLANICININ TÜM SOHBETLERİNİ LİSTELEME (GET - Mesajlarım Sayfası)
+# Flutter'daki ChatListScreen'in açılmamasını bu fonksiyon çözecek!
+@app.get("/chats/{my_id}")
+async def get_chat_list(my_id: int):
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        # u.profile_image_path kolonunu sorguya ekledik
+        query = """
+        SELECT DISTINCT ON (m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id))
+            m.sender_id, 
+            m.receiver_id, 
+            m.message_text, 
+            m.book_id, 
+            m.created_at,
+            u.email, 
+            b.title,
+            u.profile_image_path
+        FROM usermessages m
+        LEFT JOIN users u ON (CASE WHEN m.sender_id = %s THEN m.receiver_id = u.user_id ELSE m.sender_id = u.user_id END)
+        LEFT JOIN books b ON m.book_id = b.book_id
+        WHERE m.sender_id = %s OR m.receiver_id = %s
+        ORDER BY m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id), m.created_at DESC
+        """
+        cursor.execute(query, (my_id, my_id, my_id))
+        rows = cursor.fetchall()
+        
+        rows = sorted(rows, key=lambda x: x[4] if x[4] else 0, reverse=True)
+        
+        chats = []
+        for row in rows:
+            other_id = row[1] if row[0] == my_id else row[0]
+            
+            chats.append({
+                "receiver_id": other_id,
+                "receiver_name": row[5] if row[5] else f"Kullanıcı {other_id}",
+                "book_title": row[6] if row[6] else f"Kitap ID: {row[3]}",
+                "book_id": row[3],
+                "last_message": row[2],
+                "profile_image": row[7] # Veritabanındaki dosya yolunu Flutter'a gönderiyoruz
+            })
+        return chats
+    except Exception as e:
+        print(f"Hata: {e}")
+        return []
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+# Fotoğrafların kaydedileceği klasörü oluştur (yoksa)
+UPLOAD_DIR = "uploads/profiles"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/user/upload_profile_photo/{user_id}")
+async def upload_profile_photo(user_id: int, file: UploadFile = File(...)):
+    conn = get_db_connection()
+    try:
+        # Klasör ve dosya adı işlemleri (Burayı zaten başardın)
+        file_extension = file.filename.split(".")[-1]
+        file_name = f"profile_{user_id}.{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, file_name)
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # --- SORUN BURADA OLABİLİR ---
+        cur = conn.cursor()
+        # Dikkat: Tablo adın 'public.users' ise öyle yaz, sadece 'users' ise öyle kalsın.
+        # Sütun adının veritabanındakiyle (profile_image_path) tam aynı olduğundan emin ol.
+        query = "UPDATE public.users SET profile_image_path = %s WHERE user_id = %s"
+        
+        # Log atalım ki terminalde görelim ne gönderdiğimizi
+        print(f"Güncelleniyor: User: {user_id}, Path: {file_path}")
+        
+        cur.execute(query, (file_path, user_id))
+        
+        # BU SATIR ÇOK KRİTİK! Commit yapmazsan veritabanına yazmaz.
+        conn.commit() 
+
+        return {"status": "success", "image_url": file_path}
+    except Exception as e:
+        print(f"Hata detayı: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()    
+@app.delete("/chats/delete")
+async def delete_chat(my_id: int, other_id: int, book_id: int):
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        # Karşılıklı tüm mesajları siliyoruz
+        query = """
+        DELETE FROM usermessages 
+        WHERE book_id = %s 
+        AND (
+            (sender_id = %s AND receiver_id = %s) OR 
+            (sender_id = %s AND receiver_id = %s)
+        )
+        """
+        cursor.execute(query, (book_id, my_id, other_id, other_id, my_id))
+        conn.commit()
+        return {"message": "Sohbet başarıyla silindi"}
+    except Exception as e:
+        print(f"Silme hatası: {e}")
+        raise HTTPException(status_code=500, detail="Sohbet silinemedi")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()           

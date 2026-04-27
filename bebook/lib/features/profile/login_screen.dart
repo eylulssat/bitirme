@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'forgot_password_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../main_wrapper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
     // Android Emulator için: 10.0.2.2, Gerçek cihaz/Web için kendi IP'n
-    const String apiUrl = "http://192.168.67.71:8000/login"; 
+    const String apiUrl = "http://192.168.67.118:8000/login"; 
 
     setState(() => _isLoading = true);
 
@@ -48,17 +50,26 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
+      // SİLİNEN VE DÜZENLENEN KISIM BURASI:
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
+        // 1. Verileri telefona kaydediyoruz (Kalıcı olması için)
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', data['user_id']); 
+        await prefs.setString('profile_image_path', data['profile_image_path'] ?? "");
+
         if (mounted) {
-          // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz
-          Navigator.pop(context, {
-            "user_id": data['user_id'], // Bu çok önemli!
-            "user_email": data['user_email'],
-            "university": data['university'],
-            "department": data['department'],
-          });
+          // 2. GÜNCELLEMEN GEREKEN KRİTİK YER BURASI:
+          // Navigator.pop yerine pushAndRemoveUntil kullanıyoruz.
+          // Bu sayede MainWrapper'a güncel user_id'yi teslim ediyoruz.
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainWrapper(myId: data['user_id']), 
+            ),
+            (route) => false, // Geri tuşuyla tekrar login'e dönmesin diye geçmişi siliyoruz
+          );
         }
       } else {
         final errorData = jsonDecode(response.body);

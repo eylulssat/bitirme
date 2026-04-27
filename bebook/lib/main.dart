@@ -3,6 +3,7 @@ import 'features/main_wrapper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'features/payment/payment_web_view.dart';
+import 'package:bebook/features/profile/login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,19 +13,26 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Bebook',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.indigo),
-      home: const MainWrapper(),
-    );
-  }
+Widget build(BuildContext context) {
+  return MaterialApp(
+    title: 'Bebook',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(primarySwatch: Colors.indigo),
+    
+    // home: const MainWrapper(),  <-- Bu satırı siliyoruz veya yorum satırı yapıyoruz.
+    
+    initialRoute: '/', // Uygulama başlangıç adresi
+    routes: {
+      '/': (context) => const MainWrapper(myId: 0), // Ana sayfa (ID başlangıçta 0)
+      '/login': (context) => const LoginScreen(),   // ARTIK BURASI TANIMLI!
+    },
+  );
+}
 }
 
 
 class ApiService {
-  static const String baseUrl = "http://192.168.67.71:8000"; 
+  static const String baseUrl = "http://192.168.67.118:8000"; 
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {

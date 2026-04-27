@@ -3,34 +3,38 @@ import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:bebook/features/cart/cart_screen.dart';
 import 'package:bebook/features/home/home_screen.dart';
 import 'package:bebook/features/post_ad/add_product_screen.dart';
-import 'package:bebook/features/profile/profile_screen.dart'; 
+import 'package:bebook/features/profile/profile_screen.dart';
+import 'package:bebook/features/chat/chat_list_screen.dart';
 
 class MainWrapper extends StatefulWidget {
-  const MainWrapper({super.key});
+  final int myId; // <-- BURAYI EKLEDİK: Dışarıdan ID gelecek
+  const MainWrapper({super.key, this.myId = 0}); // Varsayılan olarak 0 verdik
 
   @override
   State<MainWrapper> createState() => _MainWrapperState();
 }
 
-class _MainWrapperState extends State<MainWrapper> { 
+class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
 
-  final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
+  final GlobalKey<ProfileScreenState> _profileKey =
+      GlobalKey<ProfileScreenState>();
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF); 
+    const Color primaryColor = Color(0xFF6C63FF);
 
+    // MainWrapper içindeki _pages listesi
     final List<Widget> _pages = [
-      const HomeScreen(),                 
-      const Center(child: Text("Arama")), 
-      const SizedBox(),                   
-      CartScreen(onDiscoverPressed: () {  
+      const HomeScreen(),
+      ChatListScreen(myId: widget.myId), // <-- BURAYI GÜNCELLEDİK: Artık 4 değil, giriş yapanın ID'si!
+      const SizedBox(),
+      CartScreen(onDiscoverPressed: () {
         setState(() {
           _selectedIndex = 0;
         });
       }),
-      ProfileScreen(key: _profileKey),    
+      ProfileScreen(key: _profileKey),
     ];
 
     return Scaffold(
@@ -60,7 +64,8 @@ class _MainWrapperState extends State<MainWrapper> {
               color: Colors.grey[600],
               tabs: const [
                 GButton(icon: Icons.home_rounded, text: 'Keşfet'),
-                GButton(icon: Icons.search_rounded, text: 'Ara'),
+                GButton(
+                    icon: Icons.chat_bubble_outline_rounded, text: 'Mesajlar'),
                 GButton(icon: Icons.add_circle_outline, text: 'Sat'),
                 GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
                 GButton(icon: Icons.person_outline, text: 'Profil'),
@@ -76,11 +81,10 @@ class _MainWrapperState extends State<MainWrapper> {
                   );
 
                   if (result == true) {
-                    
-                    _profileKey.currentState?.fetchMyBooks(); 
+                    _profileKey.currentState?.fetchMyBooks();
 
                     setState(() {
-                      _selectedIndex = 4; 
+                      _selectedIndex = 4;
                     });
                   }
                 } else {

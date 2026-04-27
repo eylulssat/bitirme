@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/book_card.dart';
-import '../../services/api_service.dart'; // ApiService eklendi
+import '../../services/api_service.dart';
+import 'book_detail_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,14 +11,43 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Veritabanından gelecek kitapların tutulacağı liste
-  late Future<List<dynamic>> _booksFuture;
+  List<dynamic> allBooks = []; // Veritabanından gelen tüm kitaplar
+  List<dynamic> filteredBooks = []; // Arama sonucuna göre filtrelenenler
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Sayfa açıldığında kitapları getirmesi için fonksiyonu tetikliyoruz
-    _booksFuture = ApiService.fetchBooks();
+    _loadBooks();
+  }
+
+  // Kitapları API'den çekip listelere atıyoruz
+  void _loadBooks() async {
+    try {
+      final books = await ApiService.fetchBooks();
+      setState(() {
+        allBooks = books;
+        filteredBooks = books; // Başlangıçta hepsi görünecek
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+      debugPrint("Kitap yükleme hatası: $e");
+    }
+  }
+
+  // Arama işlemini yapan fonksiyon
+  void _filterBooks(String query) {
+    setState(() {
+      filteredBooks = allBooks.where((book) {
+        final title = (book['title'] ?? "").toString().toLowerCase();
+        final author = (book['author'] ?? "").toString().toLowerCase();
+        final searchLower = query.toLowerCase();
+
+        // Hem başlıkta hem de yazarda arama yapar
+        return title.contains(searchLower) || author.contains(searchLower);
+      }).toList();
+    });
   }
 
   @override
@@ -29,12 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.notifications_none_rounded,
-                  color: Colors.black)),
-        ],
+        centerTitle: true,
       ),
       body: Column(
         children: [
@@ -42,8 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
+              onChanged: (value) => _filterBooks(value),
               decoration: InputDecoration(
-                hintText: "Kitap, yazar veya bölüm ara...",
+                hintText: "Kitap veya yazar ara...",
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF6C63FF)),
                 filled: true,
                 fillColor: Colors.white,
@@ -54,53 +80,77 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Kitap Listesi (Dinamik Grid)
+          // Kitap Listesi Alanı
           Expanded(
-            child: FutureBuilder<List<dynamic>>(
-              future: _booksFuture,
-              builder: (context, snapshot) {
-                // Veri yüklenirken dönen çember göster
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } 
-                // Hata oluşursa mesaj göster
-                else if (snapshot.hasError) {
-                  return Center(child: Text("Hata: ${snapshot.error}"));
-                } 
-                // Veri boşsa veya gelmediyse
-                else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text("Henüz hiç ilan bulunamadı."));
-                }
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredBooks.isEmpty
+                    ? _buildEmptyState() // Kitap bulunamadığında burası çalışır
+                    : GridView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 15,
+                          mainAxisSpacing: 15,
+                          childAspectRatio: 0.75,
+                        ),
+                        itemCount: filteredBooks.length,
+                        itemBuilder: (context, index) {
+                          final bookData = filteredBooks[index];
+                          final currentBook = Book(
+                            bookId: bookData['id'] ?? index,
+                            userId: bookData['user_id'] ?? 0,
+                            title: bookData['title'] ?? "Başlıksız",
+                            author: bookData['author'] ?? "Yazar Belirtilmemiş",
+                            price: bookData['price']?.toString() ?? "0",
+                            imageUrl: bookData['image_path'] ??
+                                "https://via.placeholder.com/150",
+                            university: bookData['university'] ?? "BEÜ",
+                            description: bookData['description'] ?? "",
+                          );
 
-                // Veri başarıyla geldiyse listeyi oluştur
-                final books = snapshot.data!;
-                return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 15,
-                    mainAxisSpacing: 15,
-                    childAspectRatio: 0.75,
-                  ),
-                  itemCount: books.length,
-                  itemBuilder: (context, index) {
-                    final bookData = books[index];
-                    return BookCard(
-                      book: Book(
-                        bookId: bookData['id'] ?? index,
-                        userId: bookData['user_id'] ?? 0,
-                        title: bookData['title'] ?? "Başlıksız",
-                        author: bookData['author'] ?? "Yazar Belirtilmemiş",
-                        price: bookData['price']?.toString() ?? "0",
-                        imageUrl: bookData['image_path'] ?? "https://via.placeholder.com/150",
-                        university: bookData['university'] ?? "BEÜ",
-                        description: bookData['description'] ?? "",
+                          return InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      BookDetailScreen(book: currentBook),
+                                ),
+                              );
+                            },
+                            child: BookCard(book: currentBook),
+                          );
+                        },
                       ),
-                    );
-                  },
-                );
-              },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Kitap bulunamadığında ekrana gelecek görsel yapı
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off_rounded, size: 100, color: Colors.grey[400]),
+          const SizedBox(height: 20),
+          Text(
+            "Aradığınız kriterde bir kitap\nveya yazar bulunamadı.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.bold,
             ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Lütfen farklı anahtar kelimeler deneyin.",
+            style: TextStyle(color: Colors.grey[500]),
           ),
         ],
       ),
