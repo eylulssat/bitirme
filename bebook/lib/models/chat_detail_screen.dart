@@ -7,6 +7,7 @@ import 'chat_message.dart';
 class ChatDetailScreen extends StatefulWidget {
   final int receiverId;
   final String receiverName;
+  final String? receiverImage;
   final String bookTitle;
   final int bookId;
   // GENEL OLMASI İÇİN BU İKİ SATIRI EKLEDİK:
@@ -17,6 +18,7 @@ class ChatDetailScreen extends StatefulWidget {
     super.key,
     required this.receiverId,
     required this.receiverName,
+    this.receiverImage,
     required this.bookTitle,
     required this.bookId,
     required this.myId, // Dışarıdan gelecek
@@ -60,7 +62,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final response = await http
           .get(
             Uri.parse(
-                "http://192.168.67.118:8000/messages/${widget.myId}/${widget.receiverId}/${widget.bookId}"),
+                "http://192.168.67.130:8000/messages/${widget.myId}/${widget.receiverId}/${widget.bookId}"),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -114,7 +116,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     try {
       await http.post(
-        Uri.parse("http://192.168.67.118:8000/messages/send"),
+        Uri.parse("http://192.168.67.130:8000/messages/send"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "sender_id": widget.myId,
@@ -128,7 +130,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  Widget _buildAvatar(String name, bool isMe) {
+  Widget _buildAvatar(String name, bool isMe, String? imageUrl) {
+    // imageUrl parametresi ekledik
     return Padding(
       padding: EdgeInsets.only(
         left: isMe ? 12 : 0,
@@ -138,14 +141,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         radius: 18,
         backgroundColor:
             isMe ? const Color(0xFF6C63FF).withOpacity(0.2) : Colors.grey[300],
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : "?",
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: isMe ? const Color(0xFF6C63FF) : Colors.black54,
-          ),
-        ),
+        // BURAYI GÜNCELLEDİK: Fotoğraf varsa onu göster, yoksa harf göster
+        backgroundImage: (!isMe && imageUrl != null && imageUrl.isNotEmpty)
+            ? NetworkImage(
+                "http://192.168.67.130:8000${imageUrl.startsWith('/') ? imageUrl : '/$imageUrl'}")
+            : null,
+        child: (!isMe && imageUrl != null && imageUrl.isNotEmpty)
+            ? null // Fotoğraf varsa harfe gerek yok
+            : Text(
+                name.isNotEmpty ? name[0].toUpperCase() : "?",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: isMe ? const Color(0xFF6C63FF) : Colors.black54,
+                ),
+              ),
       ),
     );
   }
@@ -157,19 +167,51 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Column(
-          children: [
-            Text(widget.receiverName,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(widget.bookTitle,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0.5,
-        centerTitle: true,
+        centerTitle: false, // Fotoğraf gelince sola yaslı durması daha şık olur
+        title: Row(
+          children: [
+            // --- FOTOĞRAF BURAYA EKLENDİ ---
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.grey[200],
+              backgroundImage: (widget.receiverImage != null &&
+                      widget.receiverImage!.isNotEmpty)
+                  ? NetworkImage(
+                      "http://192.168.67.130:8000/${widget.receiverImage!.replaceAll(r'\', '/')}")
+                  : null,
+              child: (widget.receiverImage == null ||
+                      widget.receiverImage!.isEmpty)
+                  ? Text(widget.receiverName.isNotEmpty
+                      ? widget.receiverName[0].toUpperCase()
+                      : "?")
+                  : null,
+            ),
+            const SizedBox(width: 12), // Fotoğraf ile yazı arasındaki boşluk
+
+            // İsim ve Kitap başlığını içeren sütun
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.receiverName,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    widget.bookTitle,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -199,7 +241,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                               : MainAxisAlignment.start,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (!isMe) _buildAvatar(widget.receiverName, false),
+                            if (!isMe)
+                              _buildAvatar(widget.receiverName, false,
+                                  widget.receiverImage),
                             Flexible(
                               child: Column(
                                 crossAxisAlignment: isMe
@@ -257,7 +301,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                 ],
                               ),
                             ),
-                            if (isMe) _buildAvatar(widget.myName, true),
+                            if (isMe) _buildAvatar(widget.myName, true, null),
                           ],
                         ),
                       );

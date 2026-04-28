@@ -16,6 +16,8 @@ class MainWrapper extends StatefulWidget {
 
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
+  int? userId;
+  String? userEmail;
 
   final GlobalKey<ProfileScreenState> _profileKey =
       GlobalKey<ProfileScreenState>();
@@ -27,7 +29,9 @@ class _MainWrapperState extends State<MainWrapper> {
     // MainWrapper içindeki _pages listesi
     final List<Widget> _pages = [
       const HomeScreen(),
-      ChatListScreen(myId: widget.myId), // <-- BURAYI GÜNCELLEDİK: Artık 4 değil, giriş yapanın ID'si!
+      ChatListScreen(
+          myId: widget
+              .myId), // <-- BURAYI GÜNCELLEDİK: Artık 4 değil, giriş yapanın ID'si!
       const SizedBox(),
       CartScreen(onDiscoverPressed: () {
         setState(() {
@@ -73,21 +77,31 @@ class _MainWrapperState extends State<MainWrapper> {
               selectedIndex: _selectedIndex,
               onTabChange: (index) async {
                 if (index == 2) {
+                  // 1. Yeni ürün ekleme sayfasını açıyoruz
+                  // MainWrapper.dart içinde
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AddProductScreen(),
+                      builder: (_) => AddProductScreen(
+                        userId:
+                            widget.myId, // Giriş yapanın ID'sini gönderiyoruz
+                        userEmail: userEmail, // Varsa emailini de gönder
+                      ),
                     ),
                   );
 
+                  // 2. Eğer ürün başarıyla eklendiyse (genelde geri dönerken true döner)
                   if (result == true) {
-                    _profileKey.currentState?.fetchMyBooks();
+                    // Profil sayfasındaki ilanlarım listesini yeniliyoruz
+                    _profileKey.currentState?.fetchMyBooks(widget.myId);
 
+                    // Kullanıcıyı otomatik olarak "Profil" sekmesine yönlendiriyoruz ki ilanını görsün
                     setState(() {
-                      _selectedIndex = 4;
+                      _selectedIndex = 4; // Profil sekmesinin indeksi
                     });
                   }
                 } else {
+                  // Diğer sekmelere tıklandığında normal geçiş yap
                   setState(() {
                     _selectedIndex = index;
                   });

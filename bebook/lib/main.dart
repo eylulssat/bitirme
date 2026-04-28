@@ -32,7 +32,7 @@ Widget build(BuildContext context) {
 
 
 class ApiService {
-  static const String baseUrl = "http://192.168.67.118:8000"; 
+  static const String baseUrl = "http://192.168.67.130:8000"; 
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {

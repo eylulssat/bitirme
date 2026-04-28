@@ -304,7 +304,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                       (book.imageUrl != null &&
                               book.imageUrl!.startsWith('http'))
                           ? book.imageUrl!
-                          : "http://192.168.67.118:8000/uploads/${book.imageUrl}",
+                          : "http://192.168.67.130:8000/uploads/${book.imageUrl}",
                       width: 50,
                       height: 70,
                       fit: BoxFit.cover,

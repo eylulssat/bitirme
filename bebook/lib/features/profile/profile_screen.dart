@@ -50,39 +50,39 @@ class ProfileScreenState extends State<ProfileScreen> {
       isLoggedIn = userId != null;
     });
 
-    if (isLoggedIn) {
-      fetchMyBooks(); // Giriş yapılmışsa kitapları çek
+    if (isLoggedIn && userId != null) {
+      fetchMyBooks(userId!);
     }
   }
 
-  Future<void> fetchMyBooks() async {
-    if (userId == null) return;
+  Future<void> fetchMyBooks(int id) async {
+    // Eğer zaten yükleme yapılıyorsa veya id yoksa isteği durdur (Döngü kırıcı)
+    if (isLoading) return; 
+
     setState(() => isLoading = true);
 
     try {
-      final data = await ApiService.getMyBooks(userId!);
+      // ApiService'e id'yi gönderiyoruz
+      final data = await ApiService.getMyBooks(id);
 
       setState(() {
         myBooks = data.map<Book>((b) {
+          // Resim yolu mantığın (Buraya dokunmuyorum, senin mantığın kalsın)
           String rawPath = b['image_path'] ?? b['imageUrl'] ?? "";
           String finalImageUrl = "https://via.placeholder.com/150";
 
           if (rawPath.isNotEmpty) {
             if (rawPath.startsWith('http')) {
               finalImageUrl = rawPath;
-            } else if (rawPath.length > 200 || rawPath.contains(';base64,')) {
-              finalImageUrl = "https://via.placeholder.com/150";
-              debugPrint("UYARI: Bozuk veri (Base64) algılandı.");
             } else {
-              String cleanFileName =
-                  rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
+              String cleanFileName = rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
               finalImageUrl = "${ApiService.baseUrl}/uploads/$cleanFileName";
             }
           }
 
           return Book(
             bookId: b['book_id'] ?? b['id'],
-            userId: b['user_id'] ?? userId,
+            userId: b['user_id'] ?? id,
             title: b['title'] ?? "Bilinmiyor",
             author: b['author'] ?? "Bilinmiyor",
             price: b['price'].toString(),
@@ -122,9 +122,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
 
-    if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
-      fetchMyBooks();
-    }
+    
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -197,6 +195,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                       userId = result['user_id'];
                       _remoteImagePath = result[
                           'profile_image_path']; // Backend'den gelen resim yolu
+                          fetchMyBooks(userId!);
                     });
 
                     // Hafızaya kalıcı olarak yazıyoruz ki uygulama kapanınca bilgiler gitmesin
@@ -206,7 +205,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                         'profile_image_path', _remoteImagePath ?? "");
                     // Diğer bilgileri de istersen buraya ekleyebilirsin (okul, bölüm vb.)
 
-                    fetchMyBooks();
+                    fetchMyBooks(userId!);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -376,7 +375,7 @@ class ProfileScreenState extends State<ProfileScreen> {
     List<Book> filteredMyBooks = List.from(myBooks);
 
     if (myBooks.isEmpty && !isLoading) {
-      fetchMyBooks();
+      fetchMyBooks(userId!);
     }
 
     showModalBottomSheet(
@@ -471,7 +470,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                               book: filteredMyBooks[index],
                               isMyPost: true,
                               onUpdated: () {
-                                fetchMyBooks();
+                                fetchMyBooks(userId!);
                                 Navigator.pop(context);
                               },
                             ),

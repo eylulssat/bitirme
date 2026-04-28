@@ -92,7 +92,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       var request = http.MultipartRequest(
         "POST",
-        Uri.parse("http://192.168.67.118:8001/scan"),
+        Uri.parse("http://192.168.67.130:8001/scan"),
       );
       request.files.add(
         http.MultipartFile.fromBytes("image", imageBytes, filename: fileName),
@@ -275,7 +275,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         }
 
         bool success = await ApiService.uploadBook(
-          userId: widget.userId ?? 4,
+          userId: widget.userId!,
           title: _nameController.text.trim(),
           author: _authorController.text.trim(),
           category: _typeController.text.trim(),

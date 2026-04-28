@@ -33,7 +33,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.67.118:8000" 
+BASE_URL = "http://192.168.67.130:8000" 
 
 app.add_middleware(
     CORSMiddleware,
@@ -639,4 +639,21 @@ async def delete_chat(my_id: int, other_id: int, book_id: int):
         raise HTTPException(status_code=500, detail="Sohbet silinemedi")
     finally:
         if cursor: cursor.close()
-        if conn: conn.close()           
+        if conn: conn.close()         
+@app.get("/my-chats/{user_id}")
+async def get_my_chats(user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # Hem gönderen hem alıcı olduğun konuşmaları getirir
+        cur.execute("""
+            SELECT DISTINCT sender_id, receiver_id, message_text, timestamp 
+            FROM messages 
+            WHERE sender_id = %s OR receiver_id = %s
+            ORDER BY timestamp DESC
+        """, (user_id, user_id))
+        chats = cur.fetchall()
+        # ... geri kalan dönüş formatı ...
+        return chats
+    finally:
+        conn.close()          
