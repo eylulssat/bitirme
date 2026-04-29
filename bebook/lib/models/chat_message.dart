@@ -6,6 +6,7 @@ class ChatMessage {
   final String messageText;
   final DateTime createdAt;
   final bool isRead;
+  final bool isDelivered;
 
   ChatMessage({
     this.id,
@@ -15,6 +16,7 @@ class ChatMessage {
     required this.messageText,
     required this.createdAt,
     required this.isRead,
+    required this.isDelivered,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -28,6 +30,7 @@ class ChatMessage {
           ? DateTime.parse(json['created_at']) 
           : DateTime.now(),
       isRead: json['is_read'] == true || json['is_read'] == 1,
+      isDelivered: json['is_delivered'] == true || json['is_delivered'] == 1,
     );
   }
 }

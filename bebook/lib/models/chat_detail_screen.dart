@@ -122,6 +122,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         messageText: text,
         createdAt: DateTime.now(),
         isRead: false,
+        isDelivered: false,
       ));
       _messageController.clear();
     });
@@ -285,7 +286,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isMe ? primaryColor : Colors.white,
+                                      color: isMe
+                                          ? const Color.fromARGB(255, 144, 115, 170) // Yumuşak Açık Lila
+                                          : Colors.white,
                                       borderRadius:
                                           BorderRadius.circular(18).copyWith(
                                         bottomLeft:
@@ -340,16 +343,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                             if (isMe) ...[
                                               const SizedBox(width: 4),
                                               Icon(
-                                                // MANTIK: Okunduysa çift tik (done_all), okunmadıysa tek tik (done)
-                                                msg.isRead
+                                                // ŞEKİL MANTIĞI: Okunduysa veya İletildiyse ÇİFT TİK, değilse TEK TİK
+                                                (msg.isRead || msg.isDelivered)
                                                     ? Icons.done_all
                                                     : Icons.done,
+
                                                 size: 15,
-                                                // MANTIK: Okunduysa canlı bir mavi, okunmadıysa sönük bir beyaz/gri
+
+                                                // RENK MANTIĞI:
+                                                // 1. Okunduysa -> Neon Yeşil
+                                                // 2. Sadece iletildiyse -> Parlak Beyaz (Çift Tik)
+                                                // 3. Daha iletilmediyse -> Sönük Beyaz (Tek Tik)
                                                 color: msg.isRead
-                                                    ? const Color(
-                                                        0xFF00FF88) // Neon Yeşil
-                                                    : Colors.white38,
+                                                    ? const Color(0xFF00FF88)
+                                                    : (msg.isDelivered
+                                                        ? Colors.white
+                                                        : Colors.white38),
                                               ),
                                             ],
                                           ],

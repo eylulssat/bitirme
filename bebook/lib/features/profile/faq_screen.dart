@@ -10,11 +10,12 @@ class FAQScreen extends StatelessWidget {
 
     return Scaffold(
       // Arka planı çok hafif bir gri yaparak beyaz kartların öne çıkmasını sağladık
-      backgroundColor: const Color(0xFFF9FAFF), 
+      backgroundColor: const Color(0xFFF9FAFF),
       appBar: AppBar(
         title: const Text(
           "Sıkça Sorulan Sorular",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+              color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.white,
         elevation: 0.5, // Çok hafif bir derinlik çizgisi
@@ -56,6 +57,12 @@ class FAQScreen extends StatelessWidget {
             "İlanınız, siz manuel olarak silene veya kitap satılana kadar yayında kalmaya devam eder.",
             primaryColor,
           ),
+          _buildFAQItem(
+            "💬",
+            "Mesaj ikonları (tikler) ne anlama geliyor?",
+            "• Tek Beyaz Tik: Mesajınız gönderildi.\n• Çift Beyaz Tik: Mesajınız alıcıya iletildi.\n• Çift Yeşil Tik: Mesajınız alıcı tarafından okundu.",
+            primaryColor,
+          ),
           const SizedBox(height: 20),
           const Text(
             "Başka bir sorun mu var? Destek ekibine ulaşın.",
@@ -67,7 +74,8 @@ class FAQScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFAQItem(String icon, String question, String answer, Color color) {
+  Widget _buildFAQItem(
+      String icon, String question, String answer, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -88,7 +96,8 @@ class FAQScreen extends StatelessWidget {
           iconColor: color,
           collapsedIconColor: Colors.grey.shade400,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Text(icon, style: const TextStyle(fontSize: 20)), // Başta ikon
+          leading:
+              Text(icon, style: const TextStyle(fontSize: 20)), // Başta ikon
           title: Text(
             question,
             style: const TextStyle(
@@ -99,11 +108,12 @@ class FAQScreen extends StatelessWidget {
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 20, top: 4),
+              padding: const EdgeInsets.only(
+                  left: 16, right: 16, bottom: 20, top: 4),
               child: Text(
                 answer,
                 style: TextStyle(
-                  color: Colors.grey.shade700, 
+                  color: Colors.grey.shade700,
                   height: 1.6, // Satır aralığını açtık, okuması kolaylaştı
                   fontSize: 14,
                 ),

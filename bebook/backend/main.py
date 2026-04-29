@@ -604,7 +604,8 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
     cursor = conn.cursor()
     try:
         query = """
-            SELECT sender_id, receiver_id, message_text, created_at, is_read 
+            -- 1. ADIM: SELECT kısmına is_delivered sütununu ekliyoruz
+            SELECT sender_id, receiver_id, message_text, created_at, is_read, is_delivered 
             FROM usermessages 
             WHERE ((sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s))
             AND book_id = %s
@@ -620,7 +621,8 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
                 "receiver_id": m[1],
                 "message_text": m[2],
                 "created_at": m[3].isoformat() if m[3] else None,
-                "is_read": m[4]  # <--- İşte bu satır Flutter'a "bu mesaj okundu" diyor!
+                "is_read": m[4],
+                "is_delivered": m[5]  # <-- 2. ADIM: Flutter'a bu bilgiyi de gönderiyoruz
             })
         return result
     except Exception as e:
@@ -629,6 +631,7 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
     finally:
         cursor.close()
         conn.close()
+        
 @app.post("/messages/send")
 async def send_message_fixed(data: dict):
     conn = get_db_connection()
@@ -669,6 +672,28 @@ async def mark_messages_as_read(receiver_id: int, sender_id: int, book_id: int):
     except Exception as e:
         print(f"Okundu işaretleme hatası: {e}")
         return {"status": "error"}
+    finally:
+        cursor.close()
+        conn.close()        
+@app.put("/mark_as_delivered/{receiver_id}")
+async def mark_as_delivered(receiver_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Sorgu: Alıcısı bu kişi olan ve okunmamış tüm mesajları 'iletildi' yap
+        query = """
+            UPDATE usermessages 
+            SET is_delivered = TRUE 
+            WHERE receiver_id = %s AND is_delivered = FALSE
+        """
+        cursor.execute(query, (receiver_id,))
+        conn.commit()
+        
+        print(f"Bilgi: {receiver_id} ID'li kullanıcı için mesajlar iletildi olarak işaretlendi.")
+        return {"status": "success", "message": "Mesajlar iletildi yapıldı"}
+    except Exception as e:
+        print(f"Hata oluştu: {e}")
+        return {"status": "error", "message": str(e)}
     finally:
         cursor.close()
         conn.close()        

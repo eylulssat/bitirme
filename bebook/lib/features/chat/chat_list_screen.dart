@@ -17,12 +17,24 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _fetchChatList();
-  }
+void initState() {
+  super.initState();
+  // Bu iki çağırma da initState içinde, super.initState'den sonra olmalı
+  _markMyMessagesAsDelivered(); 
+  _fetchChatList(); // <-- Burası kırmızıysa üstteki fonksiyonun parantezlerini kontrol et
+}
 
-  // 1. LİSTEYİ ÇEKEN FONKSİYON
+// BU FONKSİYON initState'in DIŞINDA OLMALI (Hemen altına ekleyebilirsin)
+Future<void> _markMyMessagesAsDelivered() async {
+  try {
+    await http.put(
+      Uri.parse("http://192.168.67.144:8000/mark_as_delivered/${widget.myId}")
+    ).timeout(const Duration(seconds: 10));
+  } catch (e) {
+    print("Hata: $e");
+  }
+}
+// 2. LİSTEYİ ÇEKEN FONKSİYON (BU EKSİK OLDUĞU İÇİN KIRMIZI YANIYOR OLABİLİR)
   Future<void> _fetchChatList() async {
     try {
       final response = await http
