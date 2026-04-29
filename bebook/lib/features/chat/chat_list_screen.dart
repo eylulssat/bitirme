@@ -14,8 +14,7 @@ class ChatListScreen extends StatefulWidget {
 class _ChatListScreenState extends State<ChatListScreen> {
   List<dynamic> chatList = [];
   bool isLoading = true;
-  int? myId;
-  String? myName;
+  
 
   @override
   void initState() {
@@ -27,7 +26,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Future<void> _fetchChatList() async {
     try {
       final response = await http
-          .get(Uri.parse("http://192.168.67.130:8000/chats/${widget.myId}"))
+          .get(Uri.parse("http://192.168.67.144:8000/chats/${widget.myId}"))
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -49,7 +48,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     try {
       final response = await http.delete(
         Uri.parse(
-            "http://192.168.67.130:8000/chats/delete?my_id=${widget.myId}&other_id=$otherId&book_id=$bookId"),
+            "http://192.168.67.144:8000/chats/delete?my_id=${widget.myId}&other_id=$otherId&book_id=$bookId"),
       );
 
       if (response.statusCode == 200) {
@@ -176,23 +175,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
             backgroundImage: chat['profile_image'] != null &&
                     chat['profile_image'].toString().isNotEmpty
                 ? NetworkImage(
-                    "http://192.168.67.130:8000/${chat['profile_image'].toString().replaceAll('\\', '/')}")
+                    "http://192.168.67.144:8000/${chat['profile_image'].toString().replaceAll('\\', '/')}")
                 : null,
             child: (chat['profile_image'] == null ||
                     chat['profile_image'].toString().isEmpty)
                 ? Text(
-                    chat['receiver_name'][0].toUpperCase(),
+                    // GÜVENLİ KONTROL:
+                    // Eğer receiver_name varsa ve boş değilse ilk harfini al,
+                    // yoksa '?' koy ki uygulama çökmesin.
+                    (chat['receiver_name'] != null &&
+                            chat['receiver_name'].toString().isNotEmpty)
+                        ? chat['receiver_name'][0].toUpperCase()
+                        : "?",
                     style: TextStyle(
                         color: primaryColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
                   )
                 : null,
           ),
           title: Padding(
             padding: const EdgeInsets.only(bottom: 4.0),
             child: Text(
-              chat['receiver_name'],
+              // chat['receiver_name'] null gelse bile uygulama çökmez, 'Bilinmeyen' yazar.
+              (chat['receiver_name'] ?? "Bilinmeyen Kullanıcı").toString(),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
@@ -222,6 +228,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ],
           ),
+          
           trailing: Row(
             mainAxisSize: MainAxisSize.min, // Sadece ikonlar kadar yer kaplar
             children: [
@@ -257,24 +264,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ],
           ),
           onTap: () {
-            print("Backend'den gelen chat verisi: $chat");
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatDetailScreen(
-                  receiverId: chat['receiver_id'],
-                  receiverName: chat['receiver_name'],
-                  receiverImage: chat['profile_image'],
-                  bookTitle: chat['book_title'],
-                  bookId: chat['book_id'],
-                  // BURAYA DİKKAT:
-                  myId: myId ?? 0, // Eğer myId boşsa 0 gönder
-                  myName: myName ??
-                      "Kullanıcı", // Eğer myName boşsa "Kullanıcı" yaz
-                ),
-              ),
-            );
-          }),
+  // Backend'den gelen veride 'receiver_id' bazen kafa karıştırabilir.
+  // Eğer sohbet listesi sorgunda 'other_id' diye bir alan varsa onu kullanmak en sağlıklısıdır.
+  print("TIKLANAN CHAT VERİSİ: ${chat.toString()}");
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChatDetailScreen(
+        // ÖNEMLİ: Karşı tarafın ID'sini doğru aldığından emin ol
+        receiverId: chat['receiver_id'], 
+        receiverName: chat['receiver_name'] ?? "Kullanıcı",
+        receiverImage: chat['profile_image'],
+        bookTitle: chat['book_title'],
+        bookId: chat['book_id'],
+        
+        // Burası senin MainWrapper'dan gelen ID'n
+        myId: widget.myId, 
+        myName: "Ben", 
+      ),
+    ),
+  );
+}),
     );
   }
 

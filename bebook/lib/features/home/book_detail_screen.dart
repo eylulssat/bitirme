@@ -4,9 +4,15 @@ import '../../models/chat_detail_screen.dart';
 
 class BookDetailScreen extends StatelessWidget {
   final Book book;
+  final int myId;
+  final String myName; // Artık soru işareti (?) koymuyoruz, 'mutlaka gelecek' diyoruz.
 
-  const BookDetailScreen({super.key, required this.book});
-
+  const BookDetailScreen({
+    super.key, 
+    required this.book, 
+    required this.myId, 
+    required this.myName // required yaparak zorunlu hale getirdik
+  });
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
@@ -128,22 +134,23 @@ class BookDetailScreen extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: () {
                 Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatDetailScreen(
-                        receiverId: book.userId,
-                        receiverName: (book.author != null &&
-                                book.author != "Yazar Belirtilmemiş")
-                            ? book.author!
-                            : "Satıcı",
-                        bookTitle: book.title,
-                        bookId: book.bookId,
-                        // --- DÜZENLENEN KISIM BURASI ---
-                        myId: 4, // Test amaçlı sabit ID
-                        myName: "Merve", // Test amaçlı sabit İsim
-                        // --------------------------------
-                      ),
-                    ));
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatDetailScreen(
+                      receiverId: book.userId,
+                      receiverName: (book.author != null &&
+                              book.author != "Yazar Belirtilmemiş")
+                          ? book.author!
+                          : "Satıcı",
+                      bookTitle: book.title,
+                      bookId: book.bookId,
+
+                      // DÜZELTİLEN YER: "widget." kısımlarını sildik çünkü bu bir StatelessWidget
+                      myId: myId,
+                      myName: myName,
+                    ),
+                  ),
+                );
               },
               icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
               label: const Text("Satıcıya Mesaj At",

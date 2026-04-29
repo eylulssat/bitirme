@@ -62,7 +62,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final response = await http
           .get(
             Uri.parse(
-                "http://192.168.67.130:8000/messages/${widget.myId}/${widget.receiverId}/${widget.bookId}"),
+                "http://192.168.67.144:8000/messages/${widget.myId}/${widget.receiverId}/${widget.bookId}"),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -95,6 +95,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _sendMessage() async {
+    
     if (_messageController.text.trim().isEmpty) return;
 
     final String text = _messageController.text;
@@ -116,7 +117,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     try {
       await http.post(
-        Uri.parse("http://192.168.67.130:8000/messages/send"),
+        Uri.parse("http://192.168.67.144:8000/messages/send"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "sender_id": widget.myId,
@@ -125,6 +126,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           "message_text": text,
         }),
       );
+      if (!mounted) return;
     } catch (e) {
       print("Gönderim hatası: $e");
     }
@@ -144,7 +146,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         // BURAYI GÜNCELLEDİK: Fotoğraf varsa onu göster, yoksa harf göster
         backgroundImage: (!isMe && imageUrl != null && imageUrl.isNotEmpty)
             ? NetworkImage(
-                "http://192.168.67.130:8000${imageUrl.startsWith('/') ? imageUrl : '/$imageUrl'}")
+                "http://192.168.67.144:8000${imageUrl.startsWith('/') ? imageUrl : '/$imageUrl'}")
             : null,
         child: (!isMe && imageUrl != null && imageUrl.isNotEmpty)
             ? null // Fotoğraf varsa harfe gerek yok
@@ -180,7 +182,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               backgroundImage: (widget.receiverImage != null &&
                       widget.receiverImage!.isNotEmpty)
                   ? NetworkImage(
-                      "http://192.168.67.130:8000/${widget.receiverImage!.replaceAll(r'\', '/')}")
+                      "http://192.168.67.144:8000/${widget.receiverImage!.replaceAll(r'\', '/')}")
                   : null,
               child: (widget.receiverImage == null ||
                       widget.receiverImage!.isEmpty)
@@ -301,7 +303,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                 ],
                               ),
                             ),
-                            if (isMe) _buildAvatar(widget.myName, true, null),
+                            //if (isMe) _buildAvatar(widget.myName, true, null),
                           ],
                         ),
                       );

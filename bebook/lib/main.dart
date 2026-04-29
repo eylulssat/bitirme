@@ -13,26 +13,25 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-Widget build(BuildContext context) {
-  return MaterialApp(
-    title: 'Bebook',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(primarySwatch: Colors.indigo),
-    
-    // home: const MainWrapper(),  <-- Bu satırı siliyoruz veya yorum satırı yapıyoruz.
-    
-    initialRoute: '/', // Uygulama başlangıç adresi
-    routes: {
-      '/': (context) => const MainWrapper(myId: 0), // Ana sayfa (ID başlangıçta 0)
-      '/login': (context) => const LoginScreen(),   // ARTIK BURASI TANIMLI!
-    },
-  );
-}
-}
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Bebook',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.indigo),
 
+      // home: const MainWrapper(),  <-- Bu satırı siliyoruz veya yorum satırı yapıyoruz.
+
+      initialRoute: '/', // Uygulama başlangıç adresi
+      routes: {
+        '/': (context) => const MainWrapper(myId: 0, myName: "Misafir"),
+        '/login': (context) => const LoginScreen(), // ARTIK BURASI TANIMLI!
+      },
+    );
+  }
+}
 
 class ApiService {
-  static const String baseUrl = "http://192.168.67.130:8000"; 
+  static const String baseUrl = "http://192.168.67.144:8000";
 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {
@@ -60,22 +59,19 @@ class ApiService {
   }
 }
 
-
-void makePayment(BuildContext context, int userId, int bookId, double price) async {
+void makePayment(
+    BuildContext context, int userId, int bookId, double price) async {
   final api = ApiService();
 
   try {
     debugPrint("--- Ödeme Başlatılıyor ---");
     final paymentResponse = await api.createPayment(userId, bookId, price);
-    
-    
+
     debugPrint("Backend Yanıtı: $paymentResponse");
-    
-    
+
     String? checkoutUrl = paymentResponse['paymentPageUrl'];
     String? orderId = paymentResponse['conversationId']?.toString();
 
-    
     if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
       if (context.mounted) {
         debugPrint("WebView Açılıyor: $checkoutUrl");
@@ -87,21 +83,20 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
         );
       }
 
-      
       if (!context.mounted) return;
 
-      
       bool isSuccess = false;
       if (orderId != null) {
         for (int i = 0; i < 20; i++) {
-          await Future.delayed(const Duration(seconds: 2)); 
+          await Future.delayed(const Duration(seconds: 2));
 
           final statusUrl = "${ApiService.baseUrl}/order-status/$orderId";
           try {
             final statusResponse = await http.get(Uri.parse(statusUrl));
             if (statusResponse.statusCode == 200) {
               final statusData = jsonDecode(statusResponse.body);
-              String currentStatus = statusData['status']?.toString().toUpperCase() ?? "";
+              String currentStatus =
+                  statusData['status']?.toString().toUpperCase() ?? "";
 
               if (currentStatus == "SUCCESS") {
                 isSuccess = true;
@@ -119,35 +114,38 @@ void makePayment(BuildContext context, int userId, int bookId, double price) asy
       // 3. ADIM: Sonuç Gösterimi
       if (context.mounted) {
         if (isSuccess) {
-          _showResultDialog(context, "Başarılı", "Ödemeniz onaylandı!", Colors.green, true);
+          _showResultDialog(
+              context, "Başarılı", "Ödemeniz onaylandı!", Colors.green, true);
         } else {
-          _showResultDialog(context, "Hata", "Ödeme tamamlanamadı veya iptal edildi.", Colors.red, false);
+          _showResultDialog(context, "Hata",
+              "Ödeme tamamlanamadı veya iptal edildi.", Colors.red, false);
         }
       }
     } else {
       debugPrint("HATA: paymentPageUrl bulunamadı!");
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ödeme linki oluşturulamadı."), backgroundColor: Colors.orange)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Ödeme linki oluşturulamadı."),
+            backgroundColor: Colors.orange));
       }
     }
   } catch (e) {
     debugPrint("Akış Hatası: $e");
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red)
-      );
+          SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red));
     }
   }
 }
 
-void _showResultDialog(BuildContext context, String title, String msg, Color color, bool isSuccess) {
+void _showResultDialog(BuildContext context, String title, String msg,
+    Color color, bool isSuccess) {
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (context) => AlertDialog(
-      title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      title: Text(title,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold)),
       content: Text(msg),
       actions: [
         TextButton(
@@ -155,7 +153,12 @@ void _showResultDialog(BuildContext context, String title, String msg, Color col
             if (isSuccess) {
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const MainWrapper()),
+                MaterialPageRoute(
+                  builder: (context) => const MainWrapper(
+                    myId: 0, // Ya da o an elinde hangi ID varsa
+                    myName: "Misafir", // Ya da o an elinde hangi isim varsa
+                  ),
+                ),
                 (route) => false,
               );
             } else {

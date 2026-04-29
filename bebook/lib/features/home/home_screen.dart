@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
-import 'book_detail_screen.dart'; 
+import 'book_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  // --- EKSİK OLAN KISIM BURASI ---
+  final int myId;
+  final String myName;
+
+  const HomeScreen({super.key, required this.myId, required this.myName});
+  // -------------------------------
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -23,18 +28,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Kitapları API'den çekip listelere atıyoruz
   void _loadBooks() async {
-    try {
-      final books = await ApiService.fetchBooks();
-      setState(() {
-        allBooks = books;
-        filteredBooks = books; // Başlangıçta hepsi görünecek
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() => isLoading = false);
-      debugPrint("Kitap yükleme hatası: $e");
-    }
+  try {
+    final books = await ApiService.fetchBooks();
+    // EĞER SAYFA KAPANDIYSA SETSTATE YAPMA
+    if (!mounted) return; 
+
+    setState(() {
+      allBooks = books;
+      filteredBooks = books;
+      isLoading = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => isLoading = false);
   }
+}
 
   // Arama işlemini yapan fonksiyon
   void _filterBooks(String query) {
@@ -99,11 +107,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         itemBuilder: (context, index) {
                           final bookData = filteredBooks[index];
                           final currentBook = Book(
-                            bookId: bookData['id'] ?? index,
+                            // BURAYI DÜZELTTİK: 'id' yerine 'book_id'
+                            bookId: bookData['book_id'] ?? 0,
                             userId: bookData['user_id'] ?? 0,
                             title: bookData['title'] ?? "Başlıksız",
                             author: bookData['author'] ?? "Yazar Belirtilmemiş",
                             price: bookData['price']?.toString() ?? "0",
+                            // Backend'de image_path olarak tutuyorsun, kontrol et:
                             imageUrl: bookData['image_path'] ??
                                 "https://via.placeholder.com/150",
                             university: bookData['university'] ?? "BEÜ",
@@ -112,11 +122,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                           return InkWell(
                             onTap: () {
+                              // Artık currentBook.bookId gerçek veritabanı ID'sini (örn: 76) taşıyor!
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      BookDetailScreen(book: currentBook),
+                                  builder: (context) => BookDetailScreen(
+                                    book: currentBook,
+                                    myId: widget.myId,
+                                    myName: widget.myName,
+                                  ),
                                 ),
                               );
                             },

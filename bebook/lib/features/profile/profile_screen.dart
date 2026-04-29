@@ -12,7 +12,14 @@ import 'package:shared_preferences/shared_preferences.dart'; // Ekle
 import 'faq_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  // 1. BU SATIRI EKLE: Sınıfın bu veriyi kabul etmesini sağlar
+  final int? userId; 
+
+  // 2. BURAYI GÜNCELLE: Constructor içine userId'yi dahil et
+  const ProfileScreen({
+    super.key, 
+    this.userId,
+  });
 
   @override
   State<ProfileScreen> createState() => ProfileScreenState();

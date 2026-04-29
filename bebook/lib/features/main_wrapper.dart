@@ -7,45 +7,45 @@ import 'package:bebook/features/profile/profile_screen.dart';
 import 'package:bebook/features/chat/chat_list_screen.dart';
 
 class MainWrapper extends StatefulWidget {
-  final int myId; // <-- BURAYI EKLEDİK: Dışarıdan ID gelecek
-  const MainWrapper({super.key, this.myId = 0}); // Varsayılan olarak 0 verdik
-
+  final int myId;
+  final String myName;
+  const MainWrapper({super.key, required this.myId, required this.myName});
   @override
   State<MainWrapper> createState() => _MainWrapperState();
 }
 
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
-  int? userId;
   String? userEmail;
 
-  final GlobalKey<ProfileScreenState> _profileKey =
-      GlobalKey<ProfileScreenState>();
+  final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 
+  // DİKKAT: Sayfa listesini build dışında veya build içinde dinamik oluşturmalısın.
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
 
-    // MainWrapper içindeki _pages listesi
+    // Listeden 'const' kelimesini sildik çünkü içine 'widget.myId' gibi değişkenler giriyor.
     final List<Widget> _pages = [
-      const HomeScreen(),
-      ChatListScreen(
-          myId: widget
-              .myId), // <-- BURAYI GÜNCELLEDİK: Artık 4 değil, giriş yapanın ID'si!
-      const SizedBox(),
-      CartScreen(onDiscoverPressed: () {
-        setState(() {
-          _selectedIndex = 0;
-        });
-      }),
-      ProfileScreen(key: _profileKey),
-    ];
-
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
+      HomeScreen(
+        myId: widget.myId,
+        myName: widget.myName,
       ),
+      ChatListScreen(
+        key: ValueKey("chat_${widget.myId}"),
+        myId: widget.myId, // ChatListScreen'de myId tanımlı olmalı!
+      ),
+      const SizedBox(), // 'Sat' butonu için boşluk
+      CartScreen(onDiscoverPressed: () {
+        setState(() => _selectedIndex = 0);
+      }),
+      ProfileScreen(
+        key: _profileKey,
+        userId: widget.myId,
+      ),
+    ];
+    return Scaffold(
+      body: _pages[_selectedIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -77,34 +77,22 @@ class _MainWrapperState extends State<MainWrapper> {
               selectedIndex: _selectedIndex,
               onTabChange: (index) async {
                 if (index == 2) {
-                  // 1. Yeni ürün ekleme sayfasını açıyoruz
-                  // MainWrapper.dart içinde
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => AddProductScreen(
-                        userId:
-                            widget.myId, // Giriş yapanın ID'sini gönderiyoruz
-                        userEmail: userEmail, // Varsa emailini de gönder
+                        userId: widget.myId,
+                        userEmail: userEmail,
                       ),
                     ),
                   );
 
-                  // 2. Eğer ürün başarıyla eklendiyse (genelde geri dönerken true döner)
                   if (result == true) {
-                    // Profil sayfasındaki ilanlarım listesini yeniliyoruz
                     _profileKey.currentState?.fetchMyBooks(widget.myId);
-
-                    // Kullanıcıyı otomatik olarak "Profil" sekmesine yönlendiriyoruz ki ilanını görsün
-                    setState(() {
-                      _selectedIndex = 4; // Profil sekmesinin indeksi
-                    });
+                    setState(() => _selectedIndex = 4);
                   }
                 } else {
-                  // Diğer sekmelere tıklandığında normal geçiş yap
-                  setState(() {
-                    _selectedIndex = index;
-                  });
+                  setState(() => _selectedIndex = index);
                 }
               },
             ),

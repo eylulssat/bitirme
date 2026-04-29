@@ -33,7 +33,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.67.130:8000" 
+BASE_URL = "http://192.168.67.144:8000" 
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +62,7 @@ IYZICO_OPTIONS = {
 
 # --- VERİ MODELLERİ ---
 class UserSignup(BaseModel):
+    full_name: str
     email: str
     password: str
     university: str
@@ -106,10 +107,12 @@ async def signup(user: UserSignup):
             bcrypt.gensalt()
         ).decode('utf-8')
 
+        # 1. full_name'i hem sütun listesine hem de %s olarak VALUES'a ekledik
         cur.execute(
-            "INSERT INTO public.users (email, password_hash, university, department) VALUES (%s, %s, %s, %s)",
-            (user.email, hashed_password, user.university, user.department)
+            "INSERT INTO public.users (full_name, email, password_hash, university, department) VALUES (%s, %s, %s, %s, %s)",
+            (user.full_name, user.email, hashed_password, user.university, user.department)
         )
+        
         conn.commit()
         return {"status": "success", "message": "Kullanıcı başarıyla kaydedildi!"}
     except Exception as e:
@@ -475,62 +478,59 @@ class MessageCreate(BaseModel):
     book_id: int
     message_text: str
 
-@app.post("/messages/send")
-async def send_user_message(msg: MessageCreate):
+@app.get("/chats/{my_id}")
+async def get_chat_list(my_id: int):
     conn = get_db_connection()
-    cursor = None
+    cursor = conn.cursor()
     try:
-        cursor = conn.cursor()
+        # Sorguya subquery (unread_count) ekledik
         query = """
-        INSERT INTO usermessages (sender_id, receiver_id, book_id, message_text)
-        VALUES (%s, %s, %s, %s)
+        SELECT DISTINCT ON (m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id))
+            m.sender_id, 
+            m.receiver_id, 
+            m.message_text, 
+            m.book_id, 
+            m.created_at,
+            u.email, 
+            b.title,
+            u.profile_image_path,
+            u.full_name,
+            (SELECT COUNT(*) FROM usermessages 
+             WHERE receiver_id = %s 
+             AND sender_id = (CASE WHEN m.sender_id = %s THEN m.receiver_id ELSE m.sender_id END) 
+             AND book_id = m.book_id 
+             AND is_read = FALSE) as unread_count
+        FROM usermessages m
+        LEFT JOIN users u ON (CASE WHEN m.sender_id = %s THEN m.receiver_id = u.user_id ELSE m.sender_id = u.user_id END)
+        LEFT JOIN books b ON m.book_id = b.book_id
+        WHERE m.sender_id = %s OR m.receiver_id = %s
+        ORDER BY m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id), m.created_at DESC
         """
-        cursor.execute(query, (msg.sender_id, msg.receiver_id, msg.book_id, msg.message_text))
-        conn.commit()
-        return {"status": "success", "message": "Mesaj başarıyla kaydedildi"}
-    except Exception as e:
-        print(f"Mesaj gönderme hatası: {e}")
-        return {"status": "error", "message": str(e)}
-    finally:
-        if cursor: cursor.close()
-        if conn: conn.close()
-
-# 2. İKİ KİŞİ ARASINDAKİ MESAJLARI GETİRME (GET - Sohbet Detayı)
-@app.get("/messages/{sender_id}/{receiver_id}/{book_id}")
-async def get_messages(sender_id: int, receiver_id: int, book_id: int):
-    conn = get_db_connection()
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        # SQL sorgusuna 'is_read' bilgisini de ekledik (Mavi tik için)
-        query = """
-        SELECT sender_id, receiver_id, message_text, created_at, is_read 
-        FROM usermessages 
-        WHERE ((sender_id = %s AND receiver_id = %s) 
-           OR (sender_id = %s AND receiver_id = %s))
-           AND book_id = %s
-        ORDER BY created_at ASC
-        """
-        cursor.execute(query, (sender_id, receiver_id, receiver_id, sender_id, book_id))
+        cursor.execute(query, (my_id, my_id, my_id, my_id, my_id)) # 5 tane parametre gönderiyoruz
         rows = cursor.fetchall()
         
-        chat_history = []
+        # ... (sıralama kodların aynı kalsın)
+        
+        chats = []
         for row in rows:
-            chat_history.append({
-                "sender_id": row[0],
-                "receiver_id": row[1],
-                "message_text": row[2],  # Flutter'daki ChatMessage modeliyle tam uyumlu
-                "created_at": row[3].isoformat() if row[3] else None, 
-                "is_read": row[4] if len(row) > 4 else False
+            other_id = row[1] if row[0] == my_id else row[0]
+            chats.append({
+                "receiver_id": other_id,
+                "receiver_name": row[8] if row[8] else row[5],
+                "book_title": row[6] if row[6] else f"Kitap #{row[3]}",
+                "book_id": row[3],
+                "last_message": row[2],
+                "profile_image": row[7],
+                "unread_count": row[9] # Yeni eklediğimiz COUNT sonucu burada
             })
-        return chat_history
+        return chats
+    # ... (finally blokların aynı)
     except Exception as e:
-        print(f"Mesaj çekme hatası: {e}")
-        return [] 
+        print(f"Sohbet Listesi Hatası: {e}")
+        return []
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
-
 # 3. KULLANICININ TÜM SOHBETLERİNİ LİSTELEME (GET - Mesajlarım Sayfası)
 # Flutter'daki ChatListScreen'in açılmamasını bu fonksiyon çözecek!
 @app.get("/chats/{my_id}")
@@ -549,7 +549,8 @@ async def get_chat_list(my_id: int):
             m.created_at,
             u.email, 
             b.title,
-            u.profile_image_path
+            u.profile_image_path,
+            u.full_name
         FROM usermessages m
         LEFT JOIN users u ON (CASE WHEN m.sender_id = %s THEN m.receiver_id = u.user_id ELSE m.sender_id = u.user_id END)
         LEFT JOIN books b ON m.book_id = b.book_id
@@ -567,11 +568,13 @@ async def get_chat_list(my_id: int):
             
             chats.append({
                 "receiver_id": other_id,
-                "receiver_name": row[5] if row[5] else f"Kullanıcı {other_id}",
-                "book_title": row[6] if row[6] else f"Kitap ID: {row[3]}",
+                # 2. BURAYI GÜNCELLEDİK: Eğer full_name (row[8]) varsa onu kullan, yoksa email (row[5]) kullan
+                "receiver_name": row[8] if row[8] else row[5],
+                "full_name": row[8], # Flutter'da direkt full_name diye de erişebilmek için ekledik
+                "book_title": row[6] if row[6] else "Bilinmeyen Kitap",
                 "book_id": row[3],
                 "last_message": row[2],
-                "profile_image": row[7] # Veritabanındaki dosya yolunu Flutter'a gönderiyoruz
+                "profile_image": row[7] 
             })
         return chats
     except Exception as e:
@@ -640,20 +643,58 @@ async def delete_chat(my_id: int, other_id: int, book_id: int):
     finally:
         if cursor: cursor.close()
         if conn: conn.close()         
-@app.get("/my-chats/{user_id}")
-async def get_my_chats(user_id: int):
+         
+# BU FONKSİYONUN EKSİK OLMASI 404 HATASINA VE MESAJLARIN KAYBOLMASINA NEDEN OLUYOR
+@app.get("/messages/{sender_id}/{receiver_id}/{book_id}")
+async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int):
     conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        cur = conn.cursor()
-        # Hem gönderen hem alıcı olduğun konuşmaları getirir
-        cur.execute("""
-            SELECT DISTINCT sender_id, receiver_id, message_text, timestamp 
-            FROM messages 
-            WHERE sender_id = %s OR receiver_id = %s
-            ORDER BY timestamp DESC
-        """, (user_id, user_id))
-        chats = cur.fetchall()
-        # ... geri kalan dönüş formatı ...
-        return chats
+        query = """
+            SELECT sender_id, receiver_id, message_text, created_at 
+            FROM usermessages 
+            WHERE ((sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s))
+            AND book_id = %s
+            ORDER BY created_at ASC
+        """
+        cursor.execute(query, (sender_id, receiver_id, receiver_id, sender_id, book_id))
+        messages = cursor.fetchall()
+        
+        result = []
+        for m in messages:
+            result.append({
+                "sender_id": m[0],
+                "receiver_id": m[1],
+                "message_text": m[2],
+                "created_at": m[3].isoformat() if m[3] else None
+            })
+        return result
+    except Exception as e:
+        print(f"Hata: {e}")
+        return []
     finally:
-        conn.close()          
+        cursor.close()
+        conn.close()
+@app.post("/messages/send")
+async def send_message_fixed(data: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        sender_id = data.get("sender_id")
+        receiver_id = data.get("receiver_id")
+        book_id = data.get("book_id")
+        message_text = data.get("message_text")
+
+        query = """
+            INSERT INTO usermessages (sender_id, receiver_id, book_id, message_text, is_read) 
+            VALUES (%s, %s, %s, %s, FALSE)
+        """
+        cursor.execute(query, (sender_id, receiver_id, book_id, message_text))
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Mesaj Kayıt Hatası: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        cursor.close()
+        conn.close()        

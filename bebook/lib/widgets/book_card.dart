@@ -23,6 +23,21 @@ class Book {
     this.university,
     required this.description,
   });
+
+  // --- BU KISMI EKLEMEN GEREKİYOR ---
+  factory Book.fromJson(Map<String, dynamic> json) {
+    return Book(
+      // Veritabanındaki 'book_id' kolonunu Flutter'daki 'bookId'ye bağlar
+      bookId: json['book_id'] ?? 0, 
+      userId: json['user_id'] ?? 0,
+      title: json['title'] ?? '',
+      author: json['author'] ?? "Yazar Belirtilmemiş",
+      price: json['price']?.toString() ?? "0", // String beklediği için toString yaptık
+      imageUrl: json['image_path'], // Veritabanında image_path olarak tutuyorsun
+      university: json['university'] ?? "BEÜ",
+      description: json['description'] ?? '',
+    );
+  }
 }
 
 List<Book> favoriteBooks = [];
