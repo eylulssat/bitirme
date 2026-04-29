@@ -1,35 +1,32 @@
 class ChatMessage {
-  final int id;
+  final int? id;
   final int senderId;
   final int receiverId;
-  final int bookId;
+  final int bookId; // <-- Burayı eklediğinden emin ol
   final String messageText;
   final DateTime createdAt;
-  final bool isRead; // MAVİ TİK İÇİN GEREKLİ ALAN
+  final bool isRead;
 
   ChatMessage({
-    required this.id,
+    this.id,
     required this.senderId,
     required this.receiverId,
-    required this.bookId,
+    required this.bookId, // <-- Burayı da ekle
     required this.messageText,
     required this.createdAt,
-    required this.isRead, // CONSTRUCTOR'A EKLENDİ
+    required this.isRead,
   });
 
-  // BACKEND'DEN GELEN VERİYİ MODELLEMEK İÇİN BU FONKSİYON ŞART:
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
-      id: json['id'] ?? 0,
+      id: json['id'],
       senderId: json['sender_id'] ?? 0,
       receiverId: json['receiver_id'] ?? 0,
-      bookId: json['book_id'] ?? 0,
+      bookId: json['book_id'] ?? 0, // <-- Backend'den gelen book_id
       messageText: json['message_text'] ?? "",
-      // Tarih verisini DateTime objesine çeviriyoruz
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at']) 
           : DateTime.now(),
-      // İŞTE MAVİ TİKİ BELİRLEYEN SATIR:
       isRead: json['is_read'] == true || json['is_read'] == 1,
     );
   }

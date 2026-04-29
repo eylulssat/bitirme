@@ -17,25 +17,30 @@ class MainWrapper extends StatefulWidget {
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
   String? userEmail;
+  bool _hasUnreadMessages = false;
+  
+  // 1. Sayfaları tutacak listeyi burada tanımlıyoruz
+  late List<Widget> _pages;
 
   final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 
-  // DİKKAT: Sayfa listesini build dışında veya build içinde dinamik oluşturmalısın.
   @override
-  Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF);
+  void initState() {
+    super.initState();
+    _checkNotifications();
 
-    // Listeden 'const' kelimesini sildik çünkü içine 'widget.myId' gibi değişkenler giriyor.
-    final List<Widget> _pages = [
+    // 2. Sayfaları initState içinde bir kez oluşturuyoruz
+    // Böylece sayfalar bellekte "canlı" kalır, durumları kaybolmaz
+    _pages = [
       HomeScreen(
         myId: widget.myId,
         myName: widget.myName,
       ),
       ChatListScreen(
         key: ValueKey("chat_${widget.myId}"),
-        myId: widget.myId, // ChatListScreen'de myId tanımlı olmalı!
+        myId: widget.myId,
       ),
-      const SizedBox(), // 'Sat' butonu için boşluk
+      const SizedBox(), // Sat butonu için boşluk
       CartScreen(onDiscoverPressed: () {
         setState(() => _selectedIndex = 0);
       }),
@@ -44,8 +49,30 @@ class _MainWrapperState extends State<MainWrapper> {
         userId: widget.myId,
       ),
     ];
+  }
+
+  Future<void> _checkNotifications() async {
+    try {
+      setState(() {
+        _hasUnreadMessages = false;
+      });
+    } catch (e) {
+      print("Bildirim kontrol hatası: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF6C63FF);
+
     return Scaffold(
-      body: _pages[_selectedIndex],
+      // 3. Body kısmında IndexedStack kullanıyoruz
+      // Bu widget, tüm sayfaları üst üste dizer ama sadece seçili olanı gösterir
+      // Diğer sayfalar arka planda "uyur" ama durumlarını (scroll vs.) korur
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -66,13 +93,38 @@ class _MainWrapperState extends State<MainWrapper> {
               duration: const Duration(milliseconds: 400),
               tabBackgroundColor: primaryColor.withOpacity(0.1),
               color: Colors.grey[600],
-              tabs: const [
-                GButton(icon: Icons.home_rounded, text: 'Keşfet'),
+              tabs: [
+                const GButton(icon: Icons.home_rounded, text: 'Keşfet'),
                 GButton(
-                    icon: Icons.chat_bubble_outline_rounded, text: 'Mesajlar'),
-                GButton(icon: Icons.add_circle_outline, text: 'Sat'),
-                GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
-                GButton(icon: Icons.person_outline, text: 'Profil'),
+                  icon: Icons.chat_bubble_outline_rounded,
+                  text: 'Mesajlar',
+                  leading: Stack(
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: _selectedIndex == 1 ? primaryColor : Colors.grey[600],
+                        size: 24,
+                      ),
+                      if (_hasUnreadMessages) 
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(1),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const GButton(icon: Icons.add_circle_outline, text: 'Sat'),
+                const GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
+                const GButton(icon: Icons.person_outline, text: 'Profil'),
               ],
               selectedIndex: _selectedIndex,
               onTabChange: (index) async {
@@ -92,7 +144,12 @@ class _MainWrapperState extends State<MainWrapper> {
                     setState(() => _selectedIndex = 4);
                   }
                 } else {
-                  setState(() => _selectedIndex = index);
+                  setState(() {
+                    _selectedIndex = index;
+                    if (index == 1) {
+                      _hasUnreadMessages = false;
+                    }
+                  });
                 }
               },
             ),
@@ -101,4 +158,4 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
     );
   }
-}
+} // _MainWrapperState sınıfı bitti

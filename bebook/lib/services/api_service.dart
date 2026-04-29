@@ -282,4 +282,15 @@ static Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
   var response = await request.send();
   return response.statusCode == 200;
 }
+static Future<void> markMessagesAsRead(int receiverId, int senderId, int bookId) async {
+  try {
+    final url = Uri.parse(
+      "$baseUrl/mark_messages_as_read?receiver_id=$receiverId&sender_id=$senderId&book_id=$bookId"
+    );
+    final response = await http.post(url);
+    print("OKUNDU İŞLEMİ: ${response.statusCode} - URL: $url"); // Bunu ekle ki terminalde gör!
+  } catch (e) {
+    print("Okundu hatası: $e");
+  }
+}
 }

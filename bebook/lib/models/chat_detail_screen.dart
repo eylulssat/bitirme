@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'chat_message.dart';
+import '../services/api_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final int receiverId;
@@ -42,11 +43,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Burada ismi aşağıdakine göre güncelledik:
+    _markAllAsRead();
+
     _fetchMessages();
 
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       _fetchMessages();
     });
+  }
+
+// Fonksiyonun ismi bu olduğu için yukarıda da aynısını çağırmalısın
+  Future<void> _markAllAsRead() async {
+    await ApiService.markMessagesAsRead(
+        widget.myId, widget.receiverId, widget.bookId);
   }
 
   @override
@@ -59,6 +70,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Future<void> _fetchMessages() async {
     try {
+      // BURADAKİ ApiService.markMessagesAsRead KISMINI SİLDİK!
+
       final response = await http
           .get(
             Uri.parse(
@@ -68,18 +81,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       if (response.statusCode == 200) {
         final List<dynamic> decodedData = jsonDecode(response.body);
-
+        if (decodedData.isNotEmpty) {
+          print(
+              "Gelen ilk mesajın okundu durumu: ${decodedData.last['is_read']}");
+        }
         if (mounted) {
           setState(() {
-            // BURAYI GÜNCELLEDİK: Modeli kullanarak listeyi oluşturuyoruz
             messages = decodedData.map((m) => ChatMessage.fromJson(m)).toList();
             _isLoading = false;
           });
-          _scrollToBottom();
         }
       }
     } catch (e) {
-      print("Mesaj çekme hatası: $e");
+      print("Hata oluştu: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -95,28 +109,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _sendMessage() async {
-    
     if (_messageController.text.trim().isEmpty) return;
 
     final String text = _messageController.text;
 
     setState(() {
-      // ARTIK MAP DEĞİL, CHATMESSAGE OBJESİ EKLİYORUZ:
       messages.add(ChatMessage(
-        id: 0, // Geçici ID
+        id: 0,
         senderId: widget.myId,
         receiverId: widget.receiverId,
         bookId: widget.bookId,
         messageText: text,
         createdAt: DateTime.now(),
-        isRead: false, // Yeni mesaj henüz okunmadığı için false
+        isRead: false,
       ));
       _messageController.clear();
     });
-    _scrollToBottom();
+
+// WidgetsBinding kullanarak listenin güncellendiğinden emin olup sonra kaydırıyoruz
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+    });
 
     try {
-      await http.post(
+      final response = await http.post(
         Uri.parse("http://192.168.67.144:8000/messages/send"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
@@ -126,6 +142,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           "message_text": text,
         }),
       );
+
+      if (response.statusCode == 200) {
+        // MESAJ BAŞARIYLA GİTTİĞİNDE:
+        // Listeyi hemen tekrar çekiyoruz ki veritabanındaki
+        // gerçek zaman damgası ve mesaj ID'si ekrana gelsin.
+        _fetchMessages();
+      }
+
       if (!mounted) return;
     } catch (e) {
       print("Gönderim hatası: $e");
@@ -277,33 +301,65 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                         )
                                       ],
                                     ),
-                                    child: Text(
-                                      msg.messageText, // Modeldeki messageText değişkenini kullanıyoruz
-                                      style: TextStyle(
-                                          color: isMe
-                                              ? Colors.white
-                                              : Colors.black87),
+                                    child: Column(
+                                      crossAxisAlignment: isMe
+                                          ? CrossAxisAlignment.end
+                                          : CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Mesaj Metni
+                                        Text(
+                                          msg.messageText,
+                                          style: TextStyle(
+                                            color: isMe
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        // Saat ve Tik Simgesi (Yan Yana)
+                                        // 351. Satırdan itibaren Row( mainAxisSize: ... ) kısmını silip bunu koy:
+
+                                        Wrap(
+                                          alignment: WrapAlignment.end,
+                                          crossAxisAlignment:
+                                              WrapCrossAlignment.center,
+                                          children: [
+                                            // Saat bilgisi
+                                            Text(
+                                              "${msg.createdAt.hour.toString().padLeft(2, '0')}:${msg.createdAt.minute.toString().padLeft(2, '0')}",
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: isMe
+                                                    ? Colors.white70
+                                                    : Colors.black45,
+                                              ),
+                                            ),
+                                            // Eğer mesaj benden gittiyse TİK göster
+                                            if (isMe) ...[
+                                              const SizedBox(width: 4),
+                                              Icon(
+                                                // MANTIK: Okunduysa çift tik (done_all), okunmadıysa tek tik (done)
+                                                msg.isRead
+                                                    ? Icons.done_all
+                                                    : Icons.done,
+                                                size: 15,
+                                                // MANTIK: Okunduysa canlı bir mavi, okunmadıysa sönük bir beyaz/gri
+                                                color: msg.isRead
+                                                    ? const Color(
+                                                        0xFF00FF88) // Neon Yeşil
+                                                    : Colors.white38,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-
-                                  // MAVİ TİK VE TEK TİK MANTIĞI BURADA:
-                                  if (isMe)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                          right: 4, top: 4),
-                                      child: Icon(
-                                        // isRead true ise çift tik (done_all), false ise tek tik (done)
-                                        isRead ? Icons.done_all : Icons.done,
-                                        size: 15,
-                                        // isRead true ise Mavi, false ise Gri
-                                        color:
-                                            isRead ? Colors.blue : Colors.grey,
-                                      ),
-                                    ),
                                 ],
                               ),
                             ),
-                            //if (isMe) _buildAvatar(widget.myName, true, null),
                           ],
                         ),
                       );

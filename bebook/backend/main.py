@@ -483,7 +483,7 @@ async def get_chat_list(my_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Sorguya subquery (unread_count) ekledik
+        # Bu sorgu hem sohbet listesini getirir hem de okunmamışları sayar (Gerekli tüm alanlar eklendi)
         query = """
         SELECT DISTINCT ON (m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id))
             m.sender_id, 
@@ -506,79 +506,32 @@ async def get_chat_list(my_id: int):
         WHERE m.sender_id = %s OR m.receiver_id = %s
         ORDER BY m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id), m.created_at DESC
         """
-        cursor.execute(query, (my_id, my_id, my_id, my_id, my_id)) # 5 tane parametre gönderiyoruz
+        
+        # 5 tane %s için 5 adet my_id gönderiyoruz
+        cursor.execute(query, (my_id, my_id, my_id, my_id, my_id))
         rows = cursor.fetchall()
         
-        # ... (sıralama kodların aynı kalsın)
+        # Tarihe göre sıralama (En yeni mesaj en üstte)
+        from datetime import datetime
+        rows = sorted(rows, key=lambda x: x[4] if x[4] else datetime.min, reverse=True)
         
         chats = []
         for row in rows:
             other_id = row[1] if row[0] == my_id else row[0]
             chats.append({
                 "receiver_id": other_id,
-                "receiver_name": row[8] if row[8] else row[5],
+                "receiver_name": row[8] if row[8] else row[5], # full_name varsa onu, yoksa email'i kullanır
+                "full_name": row[8],
                 "book_title": row[6] if row[6] else f"Kitap #{row[3]}",
                 "book_id": row[3],
                 "last_message": row[2],
                 "profile_image": row[7],
-                "unread_count": row[9] # Yeni eklediğimiz COUNT sonucu burada
+                "unread_count": row[9] # Flutter'daki yuvarlak için gereken kritik veri
             })
         return chats
-    # ... (finally blokların aynı)
+
     except Exception as e:
         print(f"Sohbet Listesi Hatası: {e}")
-        return []
-    finally:
-        if cursor: cursor.close()
-        if conn: conn.close()
-# 3. KULLANICININ TÜM SOHBETLERİNİ LİSTELEME (GET - Mesajlarım Sayfası)
-# Flutter'daki ChatListScreen'in açılmamasını bu fonksiyon çözecek!
-@app.get("/chats/{my_id}")
-async def get_chat_list(my_id: int):
-    conn = get_db_connection()
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        # u.profile_image_path kolonunu sorguya ekledik
-        query = """
-        SELECT DISTINCT ON (m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id))
-            m.sender_id, 
-            m.receiver_id, 
-            m.message_text, 
-            m.book_id, 
-            m.created_at,
-            u.email, 
-            b.title,
-            u.profile_image_path,
-            u.full_name
-        FROM usermessages m
-        LEFT JOIN users u ON (CASE WHEN m.sender_id = %s THEN m.receiver_id = u.user_id ELSE m.sender_id = u.user_id END)
-        LEFT JOIN books b ON m.book_id = b.book_id
-        WHERE m.sender_id = %s OR m.receiver_id = %s
-        ORDER BY m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id), m.created_at DESC
-        """
-        cursor.execute(query, (my_id, my_id, my_id))
-        rows = cursor.fetchall()
-        
-        rows = sorted(rows, key=lambda x: x[4] if x[4] else 0, reverse=True)
-        
-        chats = []
-        for row in rows:
-            other_id = row[1] if row[0] == my_id else row[0]
-            
-            chats.append({
-                "receiver_id": other_id,
-                # 2. BURAYI GÜNCELLEDİK: Eğer full_name (row[8]) varsa onu kullan, yoksa email (row[5]) kullan
-                "receiver_name": row[8] if row[8] else row[5],
-                "full_name": row[8], # Flutter'da direkt full_name diye de erişebilmek için ekledik
-                "book_title": row[6] if row[6] else "Bilinmeyen Kitap",
-                "book_id": row[3],
-                "last_message": row[2],
-                "profile_image": row[7] 
-            })
-        return chats
-    except Exception as e:
-        print(f"Hata: {e}")
         return []
     finally:
         if cursor: cursor.close()
@@ -651,7 +604,7 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
     cursor = conn.cursor()
     try:
         query = """
-            SELECT sender_id, receiver_id, message_text, created_at 
+            SELECT sender_id, receiver_id, message_text, created_at, is_read 
             FROM usermessages 
             WHERE ((sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s))
             AND book_id = %s
@@ -666,7 +619,8 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
                 "sender_id": m[0],
                 "receiver_id": m[1],
                 "message_text": m[2],
-                "created_at": m[3].isoformat() if m[3] else None
+                "created_at": m[3].isoformat() if m[3] else None,
+                "is_read": m[4]  # <--- İşte bu satır Flutter'a "bu mesaj okundu" diyor!
             })
         return result
     except Exception as e:
@@ -695,6 +649,26 @@ async def send_message_fixed(data: dict):
     except Exception as e:
         print(f"Mesaj Kayıt Hatası: {e}")
         return {"status": "error", "message": str(e)}
+    finally:
+        cursor.close()
+        conn.close()        
+@app.post("/mark_messages_as_read")
+async def mark_messages_as_read(receiver_id: int, sender_id: int, book_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Bana gelen mesajları okundu olarak işaretle
+        query = """
+        UPDATE usermessages 
+        SET is_read = TRUE 
+        WHERE receiver_id = %s AND sender_id = %s AND book_id = %s AND is_read = FALSE
+        """
+        cursor.execute(query, (receiver_id, sender_id, book_id))
+        conn.commit()
+        return {"status": "success", "message": "Mesajlar okundu olarak işaretlendi"}
+    except Exception as e:
+        print(f"Okundu işaretleme hatası: {e}")
+        return {"status": "error"}
     finally:
         cursor.close()
         conn.close()        

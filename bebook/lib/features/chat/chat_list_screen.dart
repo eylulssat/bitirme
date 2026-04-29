@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../models/chat_detail_screen.dart';
+import '../../services/api_service.dart';
 
 class ChatListScreen extends StatefulWidget {
   final int myId;
@@ -14,7 +15,6 @@ class ChatListScreen extends StatefulWidget {
 class _ChatListScreenState extends State<ChatListScreen> {
   List<dynamic> chatList = [];
   bool isLoading = true;
-  
 
   @override
   void initState() {
@@ -168,123 +168,142 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ],
       ),
       child: ListTile(
-          contentPadding: const EdgeInsets.all(12),
-          leading: CircleAvatar(
-            radius: 28,
-            backgroundColor: primaryColor.withOpacity(0.1),
-            backgroundImage: chat['profile_image'] != null &&
-                    chat['profile_image'].toString().isNotEmpty
-                ? NetworkImage(
-                    "http://192.168.67.144:8000/${chat['profile_image'].toString().replaceAll('\\', '/')}")
-                : null,
-            child: (chat['profile_image'] == null ||
-                    chat['profile_image'].toString().isEmpty)
-                ? Text(
-                    // GÜVENLİ KONTROL:
-                    // Eğer receiver_name varsa ve boş değilse ilk harfini al,
-                    // yoksa '?' koy ki uygulama çökmesin.
-                    (chat['receiver_name'] != null &&
-                            chat['receiver_name'].toString().isNotEmpty)
-                        ? chat['receiver_name'][0].toUpperCase()
-                        : "?",
-                    style: TextStyle(
-                        color: primaryColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
-                  )
-                : null,
-          ),
-          title: Padding(
-            padding: const EdgeInsets.only(bottom: 4.0),
-            child: Text(
-              // chat['receiver_name'] null gelse bile uygulama çökmez, 'Bilinmeyen' yazar.
-              (chat['receiver_name'] ?? "Bilinmeyen Kullanıcı").toString(),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  "📚 ${chat['book_title']}",
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          radius: 28,
+          backgroundColor: primaryColor.withOpacity(0.1),
+          backgroundImage: chat['profile_image'] != null &&
+                  chat['profile_image'].toString().isNotEmpty
+              ? NetworkImage(
+                  "http://192.168.67.144:8000/${chat['profile_image'].toString().replaceAll('\\', '/')}")
+              : null,
+          child: (chat['profile_image'] == null ||
+                  chat['profile_image'].toString().isEmpty)
+              ? Text(
+                  // GÜVENLİ KONTROL:
+                  // Eğer receiver_name varsa ve boş değilse ilk harfini al,
+                  // yoksa '?' koy ki uygulama çökmesin.
+                  (chat['receiver_name'] != null &&
+                          chat['receiver_name'].toString().isNotEmpty)
+                      ? chat['receiver_name'][0].toUpperCase()
+                      : "?",
                   style: TextStyle(
                       color: primaryColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
+                )
+              : null,
+        ),
+        title: Padding(
+          padding: const EdgeInsets.only(bottom: 4.0),
+          child: Text(
+            // chat['receiver_name'] null gelse bile uygulama çökmez, 'Bilinmeyen' yazar.
+            (chat['receiver_name'] ?? "Bilinmeyen Kullanıcı").toString(),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: primaryColor.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                "📚 ${chat['book_title']}",
+                style: TextStyle(
+                    color: primaryColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              chat['last_message'] ?? "Henüz mesaj yok...",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min, // Sadece ikonlar kadar yer kaplar
+          children: [
+            if (chat['unread_count'] != null && chat['unread_count'] > 0)
+              Container(
+                margin: const EdgeInsets.only(
+                    right: 8), // Silme butonuyla arasına mesafe
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryColor, // Temandaki ana mor renk
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  chat['unread_count'].toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                chat['last_message'] ?? "Henüz mesaj yok...",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            IconButton(
+              icon: const Icon(Icons.delete_outline,
+                  color: Colors.redAccent, size: 20),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Sohbeti Sil"),
+                    content: const Text(
+                        "Bu sohbeti silmek istediğinize emin misiniz?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("İptal"),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          deleteChat(chat['receiver_id'], chat['book_id']);
+                        },
+                        child: const Text("Sil",
+                            style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+          ],
+        ),
+        onTap: () async {
+          // 1. ADIM: Okundu işlemini BURADAN SİLDİK.
+          // Çünkü ChatDetailScreen açılınca zaten initState içinde bunu yapacak.
+
+          // 2. ADIM: Sadece sayfaya yönlendiriyoruz
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatDetailScreen(
+                receiverId: chat['receiver_id'],
+                receiverName: chat['receiver_name'] ?? "Kullanıcı",
+                receiverImage: chat['profile_image'],
+                bookTitle: chat['book_title'],
+                bookId: chat['book_id'],
+                myId: widget.myId,
+                myName: "Ben",
               ),
-            ],
-          ),
-          
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min, // Sadece ikonlar kadar yer kaplar
-            children: [
-              IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: Colors.redAccent, size: 20),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text("Sohbeti Sil"),
-                      content: const Text(
-                          "Bu sohbeti silmek istediğinize emin misiniz?"),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text("İptal"),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            deleteChat(chat['receiver_id'], chat['book_id']);
-                          },
-                          child: const Text("Sil",
-                              style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
-            ],
-          ),
-          onTap: () {
-  // Backend'den gelen veride 'receiver_id' bazen kafa karıştırabilir.
-  // Eğer sohbet listesi sorgunda 'other_id' diye bir alan varsa onu kullanmak en sağlıklısıdır.
-  print("TIKLANAN CHAT VERİSİ: ${chat.toString()}");
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ChatDetailScreen(
-        // ÖNEMLİ: Karşı tarafın ID'sini doğru aldığından emin ol
-        receiverId: chat['receiver_id'], 
-        receiverName: chat['receiver_name'] ?? "Kullanıcı",
-        receiverImage: chat['profile_image'],
-        bookTitle: chat['book_title'],
-        bookId: chat['book_id'],
-        
-        // Burası senin MainWrapper'dan gelen ID'n
-        myId: widget.myId, 
-        myName: "Ben", 
+            ),
+          );
+
+          // 3. ADIM: Sohbetten geri dönüldüğünde listeyi yenile (Okunmamış mesaj sayısı güncellensin diye)
+          _fetchChatList();
+        },
       ),
-    ),
-  );
-}),
     );
   }
 
