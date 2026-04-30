@@ -48,16 +48,8 @@ class ApiService {
   }
 
   // --- KİTAP İŞLEMLERİ ---
-  static Future<List<dynamic>> fetchBooks() async {
-    try {
-      final response = await http.get(Uri.parse("$baseUrl/books"));
-      if (response.statusCode == 200) return jsonDecode(response.body);
-      throw Exception("Kitaplar yüklenemedi");
-    } catch (e) {
-      debugPrint("Bağlantı Hatası: $e");
-      return [];
-    }
-  }
+  // ApiService.dart içinde
+
 
   static Future<List<dynamic>> getMyBooks(int userId) async {
     final response = await http.get(Uri.parse('$baseUrl/my-books/$userId'));
@@ -293,4 +285,80 @@ static Future<void> markMessagesAsRead(int receiverId, int senderId, int bookId)
     print("Okundu hatası: $e");
   }
 }
+// --- SEPET İŞLEMLERİ ---
+// --- SEPET İŞLEMLERİ (Kırmızı yanan yer burasıydı) ---
+  // --- SEPET İŞLEMLERİ ---
+  static Future<List<dynamic>> getCartItems(int userId) async {
+    print("API SERVICE CART USER ID: $userId");
+    try {
+      final String url = "$baseUrl/cart/$userId";
+      print("DEBUG: Sepet isteği gönderiliyor: $url");
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        print("DEBUG: Backend'den gelen veri: $data");
+        return data;
+      } else {
+        print("DEBUG: Backend hatası! Kod: ${response.statusCode}");
+        return [];
+      }
+    } catch (e) {
+      debugPrint("DEBUG: Sepet Çekme Hatası (ApiService): $e");
+      return [];
+    }
+  }
+  static Future<List<dynamic>> fetchBooks() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/books"));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        print("Kitaplar yüklenirken hata oluştu: ${response.statusCode}");
+        return [];
+      }
+    } catch (e) {
+      debugPrint("fetchBooks Hatası: $e");
+      return [];
+    }
+  }
+
+  static Future<bool> addToCart(int userId, int bookId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/add-to-cart'), // baseUrl değişkeninin tanımlı olduğundan emin ol
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "user_id": userId,
+          "book_id": bookId,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        return response.statusCode == 200 || response.statusCode == 201;
+      }
+      return false;
+    } catch (e) {
+      print("ApiService addToCart Hatası: $e");
+      return false;
+    }
+  }
+ // addToCart sonu
+  static Future<bool> removeFromCart(int userId, int bookId) async {
+  try {
+    // URL: .../remove-from-cart/4/15 -> Python'daki {user_id}/{book_id} ile aynı sırada!
+    final response = await http.delete(
+      Uri.parse("$baseUrl/remove-from-cart/$userId/$bookId"),
+    );
+    return response.statusCode == 200;
+  } catch (e) {
+    return false;
+  }
 }
+} // ApiService Class sonu - DOSYA BURADA BİTMELİ
+
+  
+
+  
+ 

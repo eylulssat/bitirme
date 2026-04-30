@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
 import 'book_detail_screen.dart';
-
+import 'package:bebook/models/book_model.dart';
 class HomeScreen extends StatefulWidget {
   // --- EKSİK OLAN KISIM BURASI ---
   final int myId;
   final String myName;
 
-  const HomeScreen({super.key, required this.myId, required this.myName});
+  const HomeScreen({
+    super.key,
+    required this.myId,
+    required this.myName,
+  });
   // -------------------------------
 
   @override
@@ -28,21 +32,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Kitapları API'den çekip listelere atıyoruz
   void _loadBooks() async {
-  try {
-    final books = await ApiService.fetchBooks();
-    // EĞER SAYFA KAPANDIYSA SETSTATE YAPMA
-    if (!mounted) return; 
+    try {
+      final books = await ApiService.fetchBooks();
+      // EĞER SAYFA KAPANDIYSA SETSTATE YAPMA
+      if (!mounted) return;
 
-    setState(() {
-      allBooks = books;
-      filteredBooks = books;
-      isLoading = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
-    setState(() => isLoading = false);
+      setState(() {
+        allBooks = books;
+        filteredBooks = books;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+    }
   }
-}
 
   // Arama işlemini yapan fonksiyon
   void _filterBooks(String query) {
@@ -134,7 +138,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               );
                             },
-                            child: BookCard(book: currentBook),
+                            child: BookCard(
+                              book: currentBook,
+                              myId: widget.myId, // ✅ DOĞRU
+                            ),
                           );
                         },
                       ),

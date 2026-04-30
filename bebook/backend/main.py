@@ -52,6 +52,10 @@ def get_db_connection():
         password="12345", 
         port="5432"
     )
+    print("DB CONNECT OK")
+    print(conn.get_dsn_parameters())
+
+    return conn
 
 # --- IYZICO AYARLARI ---
 IYZICO_OPTIONS = {
@@ -697,3 +701,105 @@ async def mark_as_delivered(receiver_id: int):
     finally:
         cursor.close()
         conn.close()        
+# --- SEPET İŞLEMLERİ ---
+
+# --- SEPETİ GETİRME ---
+@app.get("/cart/{user_id}")
+async def get_cart(user_id: int):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = """
+            SELECT b.book_id, b.title, b.author, b.price, b.image_path
+            FROM public.cart c
+            JOIN public.books b ON c.book_id = b.book_id
+            WHERE c.user_id = %s
+        """
+        cur.execute(query, (user_id,))
+        items = cur.fetchall()
+        
+        result = []
+        for item in items:
+            # Flutter tarafı 'imageUrl' beklediği için anahtarı değiştirdik
+            result.append({
+                "book_id": item[0], 
+                "title": item[1], 
+                "author": item[2], 
+                "price": float(item[3]), # Decimal hatası almamak için float'a çevirdik
+                "imageUrl": item[4]      # image_path yerine imageUrl yaparsan Flutter direkt tanır
+            })
+        return result
+    finally:
+        conn.close()
+
+# --- SEPETE EKLEME ---
+# --- SEPETE EKLEME (GÜNCEL) ---
+@app.post("/add-to-cart")
+async def add_to_cart(data: dict):
+    print(f"\n--- 📥 YENİ SEPET İSTEĞİ GELDİ ---")
+    print(f"Gelen Ham Veri: {data}")
+
+    # Tip dönüşümü güvenli şekilde
+    try:
+        user_id = int(data.get("user_id"))
+        book_id = int(data.get("book_id"))
+    except (TypeError, ValueError):
+        print("❌ HATA: user_id veya book_id sayıya çevrilemedi!")
+        return {"status": "error", "message": "Geçersiz veri tipi"}
+
+    conn = get_db_connection()
+
+    try:
+        cur = conn.cursor()
+
+        # 🔍 Ürün zaten var mı kontrol et
+        cur.execute(
+            "SELECT 1 FROM public.cart WHERE user_id = %s AND book_id = %s",
+            (user_id, book_id)
+        )
+
+        if cur.fetchone():
+            print("ℹ️ Ürün zaten sepette")
+            return {"status": "exists", "message": "Zaten sepette"}
+
+        # ➕ Sepete ekle
+        cur.execute(
+            "INSERT INTO public.cart (user_id, book_id) VALUES (%s, %s)",
+            (user_id, book_id)
+        )
+
+        conn.commit()
+
+        print(f"✅ BAŞARILI: Kullanıcı {user_id}, Kitap {book_id} eklendi.")
+        return {"status": "success"}
+
+    except Exception as e:
+        print(f"❌ VERİTABANI HATASI: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+    finally:
+        cur.close()
+        conn.close()
+@app.delete("/remove-from-cart/{user_id}/{book_id}")
+async def remove_from_cart(user_id: int, book_id: int):
+    conn = get_db_connection()
+    cur = None
+    try:
+        cur = conn.cursor()
+
+        cur.execute(
+            "DELETE FROM cart WHERE user_id = %s AND book_id = %s",
+            (user_id, book_id)
+        )
+
+        conn.commit()
+        return {"status": "success", "message": "Ürün sepetten çıkarıldı"}
+
+    except Exception as e:
+        print(f"Hata: {e}")
+        return {"status": "error", "message": str(e)}
+
+    finally:
+        if cur:
+            cur.close()
+        conn.close()      

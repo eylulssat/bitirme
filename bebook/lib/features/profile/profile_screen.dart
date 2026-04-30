@@ -10,14 +10,15 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Ekle
 import 'faq_screen.dart';
+import 'package:bebook/models/book_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   // 1. BU SATIRI EKLE: Sınıfın bu veriyi kabul etmesini sağlar
-  final int? userId; 
+  final int? userId;
 
   // 2. BURAYI GÜNCELLE: Constructor içine userId'yi dahil et
   const ProfileScreen({
-    super.key, 
+    super.key,
     this.userId,
   });
 
@@ -64,7 +65,7 @@ class ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> fetchMyBooks(int id) async {
     // Eğer zaten yükleme yapılıyorsa veya id yoksa isteği durdur (Döngü kırıcı)
-    if (isLoading) return; 
+    if (isLoading) return;
 
     setState(() => isLoading = true);
 
@@ -82,7 +83,8 @@ class ProfileScreenState extends State<ProfileScreen> {
             if (rawPath.startsWith('http')) {
               finalImageUrl = rawPath;
             } else {
-              String cleanFileName = rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
+              String cleanFileName =
+                  rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
               finalImageUrl = "${ApiService.baseUrl}/uploads/$cleanFileName";
             }
           }
@@ -128,8 +130,6 @@ class ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
-
-    
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -202,7 +202,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                       userId = result['user_id'];
                       _remoteImagePath = result[
                           'profile_image_path']; // Backend'den gelen resim yolu
-                          fetchMyBooks(userId!);
+                      fetchMyBooks(userId!);
                     });
 
                     // Hafızaya kalıcı olarak yazıyoruz ki uygulama kapanınca bilgiler gitmesin
@@ -474,14 +474,14 @@ class ProfileScreenState extends State<ProfileScreen> {
                               childAspectRatio: 0.65,
                             ),
                             itemBuilder: (context, index) => BookCard(
-                              book: filteredMyBooks[index],
-                              isMyPost: true,
-                              onUpdated: () {
-                                fetchMyBooks(userId!);
-                                Navigator.pop(context);
-                              },
-                            ),
-                          ),
+                                  book: filteredMyBooks[index],
+                                  myId: userId!, // 🔥 EKLE
+                                  isMyPost: true,
+                                  onUpdated: () {
+                                    fetchMyBooks(userId!);
+                                    Navigator.pop(context);
+                                  },
+                                )),
               ),
             ],
           ),

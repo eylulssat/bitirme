@@ -27,6 +27,7 @@ class _MainWrapperState extends State<MainWrapper> {
   @override
   void initState() {
     super.initState();
+    print("MAINWRAPPER USER ID: ${widget.myId}");
     _checkNotifications();
 
     // 2. Sayfaları initState içinde bir kez oluşturuyoruz
@@ -41,9 +42,12 @@ class _MainWrapperState extends State<MainWrapper> {
         myId: widget.myId,
       ),
       const SizedBox(), // Sat butonu için boşluk
-      CartScreen(onDiscoverPressed: () {
-        setState(() => _selectedIndex = 0);
-      }),
+      CartScreen(
+        myId: widget.myId, // <-- İşte bu eksik olduğu için kırmızı yanıyor!
+        onDiscoverPressed: () {
+          setState(() => _selectedIndex = 0);
+        },
+      ),
       ProfileScreen(
         key: _profileKey,
         userId: widget.myId,

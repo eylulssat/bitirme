@@ -49,6 +49,18 @@ class _LoginScreenState extends State<LoginScreen> {
           "password": _passwordController.text,
         }),
       );
+      print("🔥 LOGIN RESPONSE BODY: ${response.body}");
+
+      final data = jsonDecode(response.body);
+
+      final userId =
+          int.tryParse((data['user_id'] ?? data['id'] ?? 0).toString()) ?? 0;
+
+      print("🔥 FINAL USER ID: $userId");
+
+      print("🔥 PARSED DATA: $data");
+      print("🔥 USER ID TYPE: ${data['user_id'].runtimeType}");
+      print("🔥 USER ID VALUE: ${data['user_id']}");
 
       // SİLİNEN VE DÜZENLENEN KISIM BURASI:
       if (response.statusCode == 200) {
@@ -60,22 +72,25 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString(
             'profile_image_path', data['profile_image_path'] ?? "");
 
-        if (mounted) {
-          // 2. GÜNCELLEMEN GEREKEN KRİTİK YER BURASI:
-          // Navigator.pop yerine pushAndRemoveUntil kullanıyoruz.
-          // Bu sayede MainWrapper'a güncel user_id'yi teslim ediyoruz.
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+
+          final userId =
+              int.tryParse((data['user_id'] ?? data['id'] ?? 0).toString()) ??
+                  0;
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('user_id', userId);
+
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              // DOĞRU KISIM
               builder: (context) => MainWrapper(
-                myId: data['user_id'],
-                myName: data['full_name'] ??
-                    "Merve", // Backend'den gelen ismi ekledik
+                myId: userId,
+                myName: data['full_name'] ?? "Merve",
               ),
             ),
-            (route) =>
-                false, // Geri tuşuyla tekrar login'e dönmesin diye geçmişi siliyoruz
+            (route) => false,
           );
         }
       } else {

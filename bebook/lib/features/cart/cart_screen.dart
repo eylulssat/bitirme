@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/book_card.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../models/book_model.dart';
+
+// Not: Book modelinin bu dosyada veya import edilen yerde tanımlı olduğu varsayılmıştır.
+// Eğer hata alırsan Book modelini import ettiğinden emin ol.
 
 class CartScreen extends StatefulWidget {
   final VoidCallback onDiscoverPressed;
+  final VoidCallback? onCartUpdated;
+  final int myId;
 
-  const CartScreen({super.key, required this.onDiscoverPressed});
+  const CartScreen({
+    super.key,
+    required this.onDiscoverPressed,
+    this.onCartUpdated,
+    required this.myId,
+  });
 
   @override
   State<CartScreen> createState() => _CartScreenState();
@@ -18,11 +29,50 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   bool _isWaitingForPayment = false;
   bool _isAgreedToTerms = false;
   int? lastOrderId;
+  bool _isLoading = true;
+  List<Book> cartBooks = []; // Liste tanımı
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
+void initState() {
+  super.initState();
+
+  print("🔥 CART SCREEN MY ID: ${widget.myId}");
+
+  WidgetsBinding.instance.addObserver(this);
+  _fetchCartFromServer();
+}
+
+  void _fetchCartItems() async {
+  final items = await ApiService.getCartItems(widget.myId);
+
+  print("BOOK LİST:");
+  for (var b in items) {
+    print(b);
+  }
+
+  setState(() {
+    cartBooks = items.map((json) => Book.fromJson(json)).toList();
+  });
+}
+
+  Future<void> _fetchCartFromServer() async {
+    setState(() => _isLoading = true);
+    try {
+      print("DEBUG: Sepet verisi isteniyor (User ID: ${widget.myId})...");
+      final dynamic responseData = await ApiService.getCartItems(widget.myId);
+      print("DEBUG: Backend'den gelen ham veri: $responseData");
+
+      setState(() {
+        cartBooks =
+            (responseData as List).map((item) => Book.fromJson(item)).toList();
+        print(
+            "DEBUG: Dönüştürme başarılı. Sepetteki kitap sayısı: ${cartBooks.length}");
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      print("HATA: Sepet çekilirken bir sorun oluştu: $e");
+    }
   }
 
   @override
@@ -70,7 +120,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("li Satış Sözleşmesi"),
+        title: const Text("Mesafeli Satış Sözleşmesi"),
         content: const SingleChildScrollView(
           child: Text(
               "1. TARAFLAR: İşbu sözleşme BEBOOK üzerinden alışveriş yapan kullanıcı ile satıcı arasındadır.\n\n"
@@ -90,9 +140,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
   void _completePayment(Color primaryColor) async {
     if (cartBooks.isEmpty) return;
-
     _isAgreedToTerms = false;
-
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -196,7 +244,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
     try {
       final result = await ApiService.makeBulkPayment(
-        userId: 4,
+        userId: widget.myId,
         bookIds: ids,
         totalPrice: total,
       );
@@ -241,9 +289,11 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         elevation: 0,
         centerTitle: true,
       ),
-      body: cartBooks.isEmpty
-          ? _buildEmptyState(primaryColor)
-          : _buildCartItems(primaryColor),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : cartBooks.isEmpty
+              ? _buildEmptyState(primaryColor)
+              : _buildCartItems(primaryColor),
     );
   }
 
@@ -290,6 +340,8 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
             itemBuilder: (context, index) {
               final book = cartBooks[index];
               return Card(
+                // ValueKey silme sonrası widget'ların karışmasını kesinlikle önler
+                key: ValueKey(book.bookId),
                 margin: const EdgeInsets.only(bottom: 15),
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -299,8 +351,6 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      // Eğer veri zaten bir http adresiyle başlıyorsa (ISBN'den gelmişse) olduğu gibi kullan,
-                      // Eğer sadece dosya adıysa başına backend adresini ekle:
                       (book.imageUrl != null &&
                               book.imageUrl!.startsWith('http'))
                           ? book.imageUrl!
@@ -313,16 +363,43 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                     ),
                   ),
                   title: Text(book.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text("${book.price} TL",
                       style: TextStyle(
                           color: primaryColor, fontWeight: FontWeight.bold)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () {
-                      setState(() {
-                        cartBooks.removeAt(index);
-                      });
+                    onPressed: () async {
+                      // 1. Önce sunucudan sil
+                      bool silindi = await ApiService.removeFromCart(
+                          widget.myId, book.bookId);
+
+                      if (silindi) {
+                        // 2. Sunucudan silindiyse, listeyi backend ile TAM SENKRONİZE ET
+                        // Sadece removeAt değil, güncel listeyi çekmek en güvenli yoldur.
+                        await _fetchCartFromServer();
+
+                        // 3. Alt bardaki sayacı vs. güncellemek için üst widget'a haber ver
+                        if (widget.onCartUpdated != null) {
+                          widget.onCartUpdated!();
+                        }
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Ürün sepetten çıkarıldı"),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Silme işlemi başarısız oldu!"),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     },
                   ),
                 ),
