@@ -3,40 +3,76 @@ import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:bebook/features/cart/cart_screen.dart';
 import 'package:bebook/features/home/home_screen.dart';
 import 'package:bebook/features/post_ad/add_product_screen.dart';
-import 'package:bebook/features/profile/profile_screen.dart'; 
+import 'package:bebook/features/profile/profile_screen.dart';
+import 'package:bebook/features/chat/chat_list_screen.dart';
 
 class MainWrapper extends StatefulWidget {
-  const MainWrapper({super.key});
-
+  final int myId;
+  final String myName;
+  const MainWrapper({super.key, required this.myId, required this.myName});
   @override
   State<MainWrapper> createState() => _MainWrapperState();
 }
 
-class _MainWrapperState extends State<MainWrapper> { 
+class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
+  String? userEmail;
+  bool _hasUnreadMessages = false;
+  
+  // 1. Sayfaları tutacak listeyi burada tanımlıyoruz
+  late List<Widget> _pages;
 
-  // 🔥 1. ADIM: ProfileScreen'in içindeki fonksiyonlara erişmek için bir Key tanımlıyoruz.
-  // ProfileScreen'in State sınıfının public olması (adı başında _ olmaması) gerekebilir.
   final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
 
   @override
-  Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF); 
+  void initState() {
+    super.initState();
+    print("MAINWRAPPER USER ID: ${widget.myId}");
+    _checkNotifications();
 
-    final List<Widget> _pages = [
-      const HomeScreen(),                 // 0: Keşfet
-      const Center(child: Text("Arama")), // 1: Ara
-      const SizedBox(),                   // 2: Sat
-      CartScreen(onDiscoverPressed: () {  // 3: Sepetim
-        setState(() {
-          _selectedIndex = 0;
-        });
-      }),
-      // 🔥 2. ADIM: Key'i buraya bağlıyoruz
-      ProfileScreen(key: _profileKey),    // 4: Profil
+    // 2. Sayfaları initState içinde bir kez oluşturuyoruz
+    // Böylece sayfalar bellekte "canlı" kalır, durumları kaybolmaz
+    _pages = [
+      HomeScreen(
+        myId: widget.myId,
+        myName: widget.myName,
+      ),
+      ChatListScreen(
+        key: ValueKey("chat_${widget.myId}"),
+        myId: widget.myId,
+      ),
+      const SizedBox(), // Sat butonu için boşluk
+      CartScreen(
+        myId: widget.myId, // <-- İşte bu eksik olduğu için kırmızı yanıyor!
+        onDiscoverPressed: () {
+          setState(() => _selectedIndex = 0);
+        },
+      ),
+      ProfileScreen(
+        key: _profileKey,
+        userId: widget.myId,
+      ),
     ];
+  }
+
+  Future<void> _checkNotifications() async {
+    try {
+      setState(() {
+        _hasUnreadMessages = false;
+      });
+    } catch (e) {
+      print("Bildirim kontrol hatası: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF6C63FF);
 
     return Scaffold(
+      // 3. Body kısmında IndexedStack kullanıyoruz
+      // Bu widget, tüm sayfaları üst üste dizer ama sadece seçili olanı gösterir
+      // Diğer sayfalar arka planda "uyur" ama durumlarını (scroll vs.) korur
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
@@ -61,6 +97,38 @@ class _MainWrapperState extends State<MainWrapper> {
               duration: const Duration(milliseconds: 400),
               tabBackgroundColor: primaryColor.withValues(alpha: 0.5),
               color: Colors.grey[600],
+              tabs: [
+                const GButton(icon: Icons.home_rounded, text: 'Keşfet'),
+                GButton(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  text: 'Mesajlar',
+                  leading: Stack(
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: _selectedIndex == 1 ? primaryColor : Colors.grey[600],
+                        size: 24,
+                      ),
+                      if (_hasUnreadMessages) 
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(1),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 10, minHeight: 10),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const GButton(icon: Icons.add_circle_outline, text: 'Sat'),
+                const GButton(icon: Icons.shopping_cart_outlined, text: 'Sepetim'),
+                const GButton(icon: Icons.person_outline, text: 'Profil'),
               tabs: const [
                 GButton(icon: Icons.home_rounded,  ),
                 GButton(icon: Icons.search_rounded, ),
@@ -74,22 +142,23 @@ class _MainWrapperState extends State<MainWrapper> {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AddProductScreen(),
+                      builder: (_) => AddProductScreen(
+                        userId: widget.myId,
+                        userEmail: userEmail,
+                      ),
                     ),
                   );
 
                   if (result == true) {
-                    // 🔥 3. ADIM: Profil sayfasındaki yenileme fonksiyonunu tetikliyoruz
-                    // ProfileScreen içinde ilanları çeken fonksiyonun adının 'fetchUserBooks' olduğunu varsayıyorum.
-                    _profileKey.currentState?.fetchMyBooks(); 
-
-                    setState(() {
-                      _selectedIndex = 4; // Profile'a git
-                    });
+                    _profileKey.currentState?.fetchMyBooks(widget.myId);
+                    setState(() => _selectedIndex = 4);
                   }
                 } else {
                   setState(() {
                     _selectedIndex = index;
+                    if (index == 1) {
+                      _hasUnreadMessages = false;
+                    }
                   });
                 }
               },
@@ -99,4 +168,4 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
     );
   }
-}
+} // _MainWrapperState sınıfı bitti

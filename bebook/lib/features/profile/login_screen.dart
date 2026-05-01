@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'forgot_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main_wrapper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
+    // Android Emulator için: 10.0.2.2, Gerçek cihaz/Web için kendi IP'n
+    const String apiUrl = "http://192.168.67.144:8000/login";
     // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
     const String apiUrl = "http://192.168.1.30:8000/login"; 
 
@@ -48,9 +51,49 @@ class _LoginScreenState extends State<LoginScreen> {
           "password": _passwordController.text,
         }),
       );
+      print("🔥 LOGIN RESPONSE BODY: ${response.body}");
 
+      final data = jsonDecode(response.body);
+
+      final userId =
+          int.tryParse((data['user_id'] ?? data['id'] ?? 0).toString()) ?? 0;
+
+      print("🔥 FINAL USER ID: $userId");
+
+      print("🔥 PARSED DATA: $data");
+      print("🔥 USER ID TYPE: ${data['user_id'].runtimeType}");
+      print("🔥 USER ID VALUE: ${data['user_id']}");
+
+      // SİLİNEN VE DÜZENLENEN KISIM BURASI:
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
+        // 1. Verileri telefona kaydediyoruz (Kalıcı olması için)
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', data['user_id']);
+        await prefs.setString(
+            'profile_image_path', data['profile_image_path'] ?? "");
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+
+          final userId =
+              int.tryParse((data['user_id'] ?? data['id'] ?? 0).toString()) ??
+                  0;
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('user_id', userId);
+
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainWrapper(
+                myId: userId,
+                myName: data['full_name'] ?? "Merve",
+              ),
+            ),
+            (route) => false,
+          );
         
         // Kullanıcı bilgilerini SharedPreferences'a kaydet
         final prefs = await SharedPreferences.getInstance();
@@ -92,7 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Giriş Yap", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text("Giriş Yap",
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -106,31 +150,39 @@ class _LoginScreenState extends State<LoginScreen> {
               key: _formKey,
               child: Column(
                 children: [
-                  const Icon(Icons.lock_person_rounded, size: 80, color: primaryColor),
+                  const Icon(Icons.lock_person_rounded,
+                      size: 80, color: primaryColor),
                   const SizedBox(height: 30),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => (v == null || v.isEmpty) ? "E-posta giriniz" : null,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? "E-posta giriniz" : null,
                     decoration: InputDecoration(
-                      labelText: "E-posta", 
-                      prefixIcon: const Icon(Icons.mail_outline), 
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      labelText: "E-posta",
+                      prefixIcon: const Icon(Icons.mail_outline),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 20),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _isObscure,
-                    validator: (v) => (v == null || v.isEmpty) ? "Şifre giriniz" : null,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? "Şifre giriniz" : null,
                     decoration: InputDecoration(
                       labelText: "Şifre",
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
-                        icon: Icon(_isObscure ? Icons.visibility : Icons.visibility_off), 
-                        onPressed: () => setState(() => _isObscure = !_isObscure),
+                        icon: Icon(_isObscure
+                            ? Icons.visibility
+                            : Icons.visibility_off),
+                        onPressed: () =>
+                            setState(() => _isObscure = !_isObscure),
                       ),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -140,12 +192,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  const ForgotPasswordScreen()),
                         );
                       },
                       child: const Text(
                         "Şifremi Unuttum",
-                        style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: Color(0xFF6C63FF),
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -154,20 +210,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: _isLoading 
-                        ? null // İstek devam ederken butonu pasif yap
-                        : () {
-                            if (_formKey.currentState!.validate()) {
-                              _handleLogin();
-                            }
-                          },
+                      onPressed: _isLoading
+                          ? null // İstek devam ederken butonu pasif yap
+                          : () {
+                              if (_formKey.currentState!.validate()) {
+                                _handleLogin();
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor, 
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        backgroundColor: primaryColor,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: _isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Giriş Yap", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text("Giriş Yap",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

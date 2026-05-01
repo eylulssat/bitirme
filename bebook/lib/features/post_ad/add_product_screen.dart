@@ -29,6 +29,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _publisherController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _mailController = TextEditingController();
+
+  bool isUserLoggedIn = true;
   late TextEditingController _mailController;
 
   bool isUserLoggedIn = true; // Test aşamasında true, normalde auth kontrolü yapılmalı
@@ -37,7 +40,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
-    _mailController = TextEditingController(text: widget.userEmail ?? "");
+    _mailController.text = widget.userEmail ?? "";
     debugPrint("AddProductScreen aktif. User ID: ${widget.userId}");
   }
 
@@ -87,6 +90,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         await fetchBookData(imageBytes, pickedFile.name);
       }
     } catch (e) {
+      print("Hata: $e");
       debugPrint("Hata: $e");
     }
   }
@@ -96,6 +100,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
     try {
       var request = http.MultipartRequest(
         "POST",
+        Uri.parse("http://192.168.67.144:8001/scan"),
+      );
+      request.files.add(
+        http.MultipartFile.fromBytes("image", imageBytes, filename: fileName),
         Uri.parse("http://127.0.0.1:8001/scan"), // AI Sunucu - localhost
       );
 
@@ -117,6 +125,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _authorController.text = data["author"] ?? "";
           _publisherController.text = data["publisher"] ?? "";
         });
+      }
+    } catch (e) {
+      print("Bağlantı hatası: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void showLoginAlert(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Giriş Gerekli"),
+        content: const Text("İlan vermek için lütfen giriş yapın."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Tamam"))
+        ],
+      ),
+    );
+  }
+
         _showSnackBar("Kitap bilgileri AI ile getirildi!", Colors.green);
       }
     } catch (e) {
@@ -160,10 +191,24 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(height: 15),
             _buildInput(label: "Yayınevi", icon: Icons.business_outlined, controller: _publisherController),
             const SizedBox(height: 15),
+            _buildInput(
+                label: "Yayınevi",
+                icon: Icons.business_outlined,
+                controller: _publisherController),
+            const SizedBox(height: 15),
+            _buildInput(
+                label: "Fiyat (TL) *",
+                icon: Icons.sell_outlined,
+                isNumber: true,
+                controller: _priceController),
             _buildInput(label: "Fiyat (TL) *", icon: Icons.sell_outlined, isNumber: true, controller: _priceController),
             const SizedBox(height: 15),
             _buildInput(label: "Açıklama", icon: Icons.description_outlined, controller: _descController),
             const SizedBox(height: 15),
+            _buildInput(
+                label: "İletişim Maili *",
+                icon: Icons.contact_mail_outlined,
+                controller: _mailController),
             _buildInput(label: "İletişim Maili *", icon: Icons.contact_mail_outlined, controller: _mailController),
             const SizedBox(height: 30),
             const Text("Fotoğraf Ekle", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -174,6 +219,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 scrollDirection: Axis.horizontal,
                 itemCount: _selectedImages.length + (_selectedImages.length < 5 ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == _selectedImages.length)
+                    return _buildAddPhotoButton();
                   if (index == _selectedImages.length) return _buildAddPhotoButton();
                   return _buildImageThumbnail(index);
                 },
@@ -181,7 +228,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
             const SizedBox(height: 40),
             _buildSubmitButton(),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -277,13 +323,110 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return GestureDetector(
       onTap: _showPickOptions,
       child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 10),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: const Color(0xFF6C63FF)),
+          gradient: const LinearGradient(
+              colors: [Color(0xFF6C63FF), Color(0xFF4B45B2)]),
+          borderRadius: BorderRadius.circular(20),
         ),
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.white))
+            : const Column(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded,
+                      color: Colors.white, size: 50),
+                  SizedBox(height: 15),
+                  Text("ISBN Barkodunu Tara",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18)),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+  return SizedBox(
+    width: double.infinity,
+    height: 55,
+    child: ElevatedButton(
+      onPressed: () async {
+        if (!isUserLoggedIn) {
+          showLoginAlert(context);
+          return;
+        }
+        if (_nameController.text.isEmpty ||
+            _authorController.text.isEmpty ||
+            _priceController.text.isEmpty ||
+            _mailController.text.isEmpty) {
+          _showSnackBar("Lütfen yıldızlı (*) alanları doldurun!", Colors.orange);
+          return;
+        }
+        double? priceValue = double.tryParse(_priceController.text);
+        if (priceValue == null) {
+          _showSnackBar("Geçerli bir fiyat giriniz!", Colors.orange);
+          return;
+        }
+
+        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
+        String imagePathToSend = ""; 
+        if (_selectedImages.isNotEmpty) {
+          // Base64 metne çevirmek yerine doğrudan dosya yolunu alıyoruz
+          imagePathToSend = _selectedImages[0].path; 
+        }
+
+        bool success = await ApiService.uploadBook(
+          userId: widget.userId!,
+          title: _nameController.text.trim(),
+          author: _authorController.text.trim(),
+          category: _typeController.text.trim(),
+          price: priceValue,
+          description: _descController.text.trim(),
+          sellerEmail: _mailController.text.trim(),
+          imagePath: imagePathToSend, // Artık Base64 değil, gerçek yol gidiyor
+        );
+        // --- DEĞİŞİKLİK BURADA BİTİYOR ---
+
+        if (success) {
+          _showSnackBar("İlan başarıyla yayınlandı!", Colors.green);
+          Navigator.pop(context, true);
+        } else {
+          _showSnackBar("Hata: İlan yayınlanamadı.", Colors.red);
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF6C63FF),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      ),
+      child: const Text("İlanı Yayınla",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    ),
+  );
+}
+
+  Widget _buildInput(
+      {required String label,
+      required IconData icon,
+      bool isNumber = false,
+      TextEditingController? controller}) {
+    return TextField(
+      controller: controller,
+      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      inputFormatters:
+          isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF6C63FF)),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none),
         child: const Icon(Icons.add_a_photo_outlined, color: Color(0xFF6C63FF), size: 30),
       ),
     );
@@ -363,6 +506,56 @@ class _AddProductScreenState extends State<AddProductScreen> {
     ]);
   }
 
+  Widget _buildAddPhotoButton() {
+    return GestureDetector(
+      onTap: () => _pickImage(ImageSource.gallery),
+      child: Container(
+        width: 100,
+        margin: const EdgeInsets.only(right: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: const Color(0xFF6C63FF)),
+        ),
+        child: const Icon(Icons.add_a_photo_outlined,
+            color: Color(0xFF6C63FF), size: 30),
+      ),
+    );
+  }
+
+  Widget _buildImageThumbnail(int index) {
+    return Stack(
+      children: [
+        Container(
+          width: 100,
+          margin: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            image: DecorationImage(
+                image: FileImage(_selectedImages[index]), fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          right: 15,
+          top: 5,
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedImages.removeAt(index)),
+            child: const CircleAvatar(
+                backgroundColor: Colors.red,
+                radius: 12,
+                child: Icon(Icons.close, size: 16, color: Colors.white)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
+}
   void _showSnackBar(String msg, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));

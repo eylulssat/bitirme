@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart'; // Bu satırı ekledim
+import 'package:flutter/material.dart'; 
 import 'package:webview_flutter/webview_flutter.dart';
 
 class PaymentWebView extends StatefulWidget {
@@ -25,7 +25,7 @@ class _PaymentWebViewState extends State<PaymentWebView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Güvenli Ödeme"),
-        backgroundColor: Colors.indigo, // Projenin temasına uygun olsun
+        backgroundColor: Colors.indigo, 
       ),
       body: WebViewWidget(controller: controller),
     );

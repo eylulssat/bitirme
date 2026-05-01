@@ -6,19 +6,33 @@ import 'about_bebook_screen.dart';
 import 'favorites_screen.dart';
 import '../../widgets/book_card.dart';
 import '../../services/api_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Ekle
+import 'faq_screen.dart';
+import 'package:bebook/models/book_model.dart';
 import '../../models/book_model.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  // 1. BU SATIRI EKLE: Sınıfın bu veriyi kabul etmesini sağlar
+  final int? userId;
+
+  // 2. BURAYI GÜNCELLE: Constructor içine userId'yi dahil et
+  const ProfileScreen({
+    super.key,
+    this.userId,
+  });
 
   @override
   State<ProfileScreen> createState() => ProfileScreenState();
 }
 
 class ProfileScreenState extends State<ProfileScreen> {
+  File? _imageFile; // Seçilen dosyayı hafızada tutmak için
   List<Book> myBooks = [];
   bool isLoading = false;
   bool isLoggedIn = false;
+  String? _remoteImagePath;
 
   String? userEmail;
   String? userUniversity;
@@ -30,20 +44,64 @@ class ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserData(); // Eskiden burada sadece fetchMyBooks kontrolü vardı, şimdi bu geldi
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Hafızadan verileri okuyoruz (Login ekranında kaydettiğimiz bilgiler)
+      userId = prefs.getInt('user_id');
+      userEmail = prefs.getString('user_email');
+      userUniversity = prefs.getString('university');
+      userDepartment = prefs.getString('department');
+      _remoteImagePath = prefs.getString('profile_image_path');
+
+      // Eğer hafızada bir id varsa, kullanıcı hala "Giriş Yapmış" demektir
+      isLoggedIn = userId != null;
+    });
+
     if (isLoggedIn && userId != null) {
-      fetchMyBooks();
+      fetchMyBooks(userId!);
     }
   }
 
-  Future<void> fetchMyBooks() async {
-    if (userId == null) return;
+  Future<void> fetchMyBooks(int id) async {
+    // Eğer zaten yükleme yapılıyorsa veya id yoksa isteği durdur (Döngü kırıcı)
+    if (isLoading) return;
+
     setState(() => isLoading = true);
 
     try {
-      final data = await ApiService.getMyBooks(userId!);
+      // ApiService'e id'yi gönderiyoruz
+      final data = await ApiService.getMyBooks(id);
 
       setState(() {
         myBooks = data.map<Book>((b) {
+          // Resim yolu mantığın (Buraya dokunmuyorum, senin mantığın kalsın)
+          String rawPath = b['image_path'] ?? b['imageUrl'] ?? "";
+          String finalImageUrl = "https://via.placeholder.com/150";
+
+          if (rawPath.isNotEmpty) {
+            if (rawPath.startsWith('http')) {
+              finalImageUrl = rawPath;
+            } else {
+              String cleanFileName =
+                  rawPath.replaceAll("uploads", "").replaceAll("/", "").trim();
+              finalImageUrl = "${ApiService.baseUrl}/uploads/$cleanFileName";
+            }
+          }
+
+          return Book(
+            bookId: b['book_id'] ?? b['id'],
+            userId: b['user_id'] ?? id,
+            title: b['title'] ?? "Bilinmiyor",
+            author: b['author'] ?? "Bilinmiyor",
+            price: b['price'].toString(),
+            imageUrl: finalImageUrl,
+            university: b['university'] ?? "Zonguldak BEÜ",
+            description: b['description'] ?? "",
+          );
           return Book.fromJson(b);
         }).toList();
       });
@@ -54,13 +112,28 @@ class ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null && userId != null) {
+      File image = File(pickedFile.path);
+      bool success = await ApiService.uploadProfilePhoto(userId!, image);
+
+      if (success) {
+        setState(() {
+          _imageFile = image;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profil fotoğrafı güncellendi!")),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
-
-    if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
-      fetchMyBooks();
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -123,14 +196,27 @@ class ProfileScreenState extends State<ProfileScreen> {
                   );
 
                   if (result != null && result is Map) {
+                    final prefs = await SharedPreferences
+                        .getInstance(); // Hafızaya erişmek için
                     setState(() {
                       isLoggedIn = true;
                       userEmail = result['user_email'];
                       userUniversity = result['university'];
                       userDepartment = result['department'];
                       userId = result['user_id'];
+                      _remoteImagePath = result[
+                          'profile_image_path']; // Backend'den gelen resim yolu
+                      fetchMyBooks(userId!);
                     });
-                    fetchMyBooks();
+
+                    // Hafızaya kalıcı olarak yazıyoruz ki uygulama kapanınca bilgiler gitmesin
+                    await prefs.setInt('user_id', userId!);
+                    await prefs.setString('user_email', userEmail!);
+                    await prefs.setString(
+                        'profile_image_path', _remoteImagePath ?? "");
+                    // Diğer bilgileri de istersen buraya ekleyebilirsin (okul, bölüm vb.)
+
+                    fetchMyBooks(userId!);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -184,6 +270,35 @@ class ProfileScreenState extends State<ProfileScreen> {
                 ]),
             child: Row(
               children: [
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: CircleAvatar(
+                    radius: 40,
+                    backgroundColor: primaryColor.withOpacity(0.2),
+                    // BURASI GÜNCELLENDİ: Hem galeriden seçilen hem sunucudan gelen fotoğrafa bakar
+                    backgroundImage: _imageFile != null
+                        ? FileImage(_imageFile!)
+                        : (_remoteImagePath != null &&
+                                _remoteImagePath!.isNotEmpty
+                            ? NetworkImage(
+                                    "${ApiService.baseUrl}/$_remoteImagePath")
+                                as ImageProvider
+                            : null),
+
+                    // BURASI GÜNCELLENDİ: Eğer her iki durumda da fotoğraf yoksa harfi gösterir
+                    child: (_imageFile == null &&
+                            (_remoteImagePath == null ||
+                                _remoteImagePath!.isEmpty))
+                        ? Text(
+                            (userEmail != null && userEmail!.isNotEmpty)
+                                ? userEmail![0].toUpperCase()
+                                : "?",
+                            style: TextStyle(
+                                color: primaryColor,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold),
+                          )
+                        : null,
                 CircleAvatar(
                   radius: 35,
                   backgroundColor: primaryColor..withValues(alpha: 0.5),
@@ -206,7 +321,9 @@ class ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 17)),
                       const SizedBox(height: 4),
-                      Text(userUniversity ?? "Zonguldak Bülent Ecevit Üniversitesi",
+                      Text(
+                          userUniversity ??
+                              "Zonguldak Bülent Ecevit Üniversitesi",
                           style: const TextStyle(
                               color: Colors.grey, fontSize: 14)),
                     ],
@@ -226,25 +343,49 @@ class ProfileScreenState extends State<ProfileScreen> {
                       builder: (context) => const FavoritesScreen()))),
           _buildTile(Icons.sell_outlined, "Satışa Sunduğum Kitaplar",
               primaryColor, () => _showMyBooksSheet()),
+
+// YENİ EKLEYECEĞİN KISIM:
+
           _buildTile(Icons.assignment_turned_in_outlined, "Satılan Kitaplarım",
               primaryColor, () {
             ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Bu özellik yakında eklenecek.")));
           }),
+          _buildTile(
+            Icons.help_outline_rounded,
+            "Sıkça Sorulan Sorular(SSS)",
+            primaryColor,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FAQScreen()),
+              );
+            },
+          ),
+
+          // ... Profil Dashboard'un en altındaki Çıkış Yap butonu ...
+
           const SizedBox(height: 30),
           TextButton.icon(
-            onPressed: () {
+            onPressed: () async {
+              // Burayı async yapmayı unutma
+              final prefs = await SharedPreferences.getInstance();
+              await prefs
+                  .clear(); // Telefona kayıtlı tüm kullanıcı bilgilerini (id, email, foto yolu) siliyoruz
+
               setState(() {
                 isLoggedIn = false;
                 userEmail = null;
                 userId = null;
+                _remoteImagePath = null; // Fotoğraf yolunu da sıfırla
                 myBooks = [];
               });
             },
             icon: const Icon(Icons.exit_to_app, color: Colors.red),
-            label: const Text("Çıkış Yap",
-                style:
-                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            label: const Text(
+              "Çıkış Yap",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -252,18 +393,20 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showMyBooksSheet() {
-    // Sayfa açılırken veriler boşsa tekrar çekelim
+    // Arama için geçici liste ve controller
+    List<Book> filteredMyBooks = List.from(myBooks);
+
     if (myBooks.isEmpty && !isLoading) {
-      fetchMyBooks();
+      fetchMyBooks(userId!);
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder( // Alt sayfa içinde state yönetimi için
+      builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.75,
+          height: MediaQuery.of(context).size.height * 0.80,
           decoration: const BoxDecoration(
             color: Color(0xFFF5F5F5),
             borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -278,36 +421,82 @@ class ProfileScreenState extends State<ProfileScreen> {
                       color: Colors.grey[300],
                       borderRadius: BorderRadius.circular(10))),
               const Padding(
-                padding: EdgeInsets.all(20.0),
+                padding: EdgeInsets.only(top: 20.0, bottom: 10),
                 child: Text("İlanlarım",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
+
+              // Arama Çubuğu
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
+                child: TextField(
+                  onChanged: (value) {
+                    setModalState(() {
+                      filteredMyBooks = myBooks.where((book) {
+                        return book.title
+                                .toLowerCase()
+                                .contains(value.toLowerCase()) ||
+                            (book.author ?? "")
+                                .toLowerCase()
+                                .contains(value.toLowerCase());
+                      }).toList();
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: "İlanlarımda ara...",
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFF6C63FF)),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : myBooks.isEmpty
-                        ? const Center(
-                            child: Text("Henüz bir ilanınız bulunmuyor."))
+                    : filteredMyBooks.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.search_off,
+                                    size: 60, color: Colors.grey[400]),
+                                const SizedBox(height: 10),
+                                Text(
+                                  myBooks.isEmpty
+                                      ? "Henüz bir ilanınız bulunmuyor."
+                                      : "Aradığınız ilan bulunamadı.",
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          )
                         : GridView.builder(
                             padding: const EdgeInsets.all(16),
-                            itemCount: myBooks.length,
+                            itemCount: filteredMyBooks.length,
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
                               crossAxisSpacing: 15,
                               mainAxisSpacing: 15,
-                              childAspectRatio: 0.65, // Butonlar eklendiği için boyutu biraz artırdık
+                              childAspectRatio: 0.65,
                             ),
                             itemBuilder: (context, index) => BookCard(
-                              book: myBooks[index],
-                              isMyPost: true, // 🔥 Düzenle/Sil butonlarını aktif eder
-                              onUpdated: () {
-                                // Bir ilan silindiğinde veya güncellendiğinde:
-                                fetchMyBooks(); // Ana veriyi güncelle
-                                Navigator.pop(context); // BottomSheet'i kapat (tazelenmiş veriyi görmek için tekrar açılır)
-                              },
-                            ),
-                          ),
+                                  book: filteredMyBooks[index],
+                                  myId: userId!, // 🔥 EKLE
+                                  isMyPost: true,
+                                  onUpdated: () {
+                                    fetchMyBooks(userId!);
+                                    Navigator.pop(context);
+                                  },
+                                )),
               ),
             ],
           ),
