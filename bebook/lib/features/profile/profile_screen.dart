@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Ekle
 import 'faq_screen.dart';
 import 'package:bebook/models/book_model.dart';
+import '../../models/book_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   // 1. BU SATIRI EKLE: Sınıfın bu veriyi kabul etmesini sağlar
@@ -37,6 +38,8 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userUniversity;
   String? userDepartment;
   int? userId;
+
+  final String baseUrl = "http://192.168.1.30:8000/uploads/";  // LOKAL IP KORUNDU
 
   @override
   void initState() {
@@ -99,6 +102,7 @@ class ProfileScreenState extends State<ProfileScreen> {
             university: b['university'] ?? "Zonguldak BEÜ",
             description: b['description'] ?? "",
           );
+          return Book.fromJson(b);
         }).toList();
       });
     } catch (e) {
@@ -262,7 +266,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                      color: Colors.black.withValues(alpha: 0.5), blurRadius: 10)
                 ]),
             child: Row(
               children: [
@@ -295,6 +299,17 @@ class ProfileScreenState extends State<ProfileScreen> {
                                 fontWeight: FontWeight.bold),
                           )
                         : null,
+                CircleAvatar(
+                  radius: 35,
+                  backgroundColor: primaryColor..withValues(alpha: 0.5),
+                  child: Text(
+                    (userEmail != null && userEmail!.isNotEmpty)
+                        ? userEmail![0].toUpperCase()
+                        : "?",
+                    style: TextStyle(
+                        color: primaryColor,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 20),

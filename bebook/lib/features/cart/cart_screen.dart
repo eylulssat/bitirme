@@ -234,6 +234,7 @@ void initState() {
   void _processPaymentRequest(Color primaryColor) async {
     List<int> ids =
         cartBooks.map((b) => int.parse(b.bookId.toString())).toList();
+    List<int> ids = cartBooks.map((b) => b.id).toList();
     double total = _calculateTotal();
 
     showDialog(
@@ -360,6 +361,9 @@ void initState() {
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           const Icon(Icons.book, size: 40),
+                      book.imagePath.isNotEmpty ? book.imagePath : "https://via.placeholder.com/150",
+                      width: 50, height: 70, fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.book, size: 40),
                     ),
                   ),
                   title: Text(book.title,
@@ -423,6 +427,7 @@ void initState() {
               blurRadius: 10,
               offset: const Offset(0, -5))
         ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, -5))],
       ),
       child: SafeArea(
         child: Column(

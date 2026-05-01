@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // HTTP istekleri için
-import 'dart:convert'; // JSON dönüşümleri için
+import 'package:bebook/services/api_service.dart'; // ApiService'i import ettik
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -13,6 +12,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // 1. VERİLERİ YAKALAMAK İÇİN CONTROLLER'LAR
+  
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController fullNameController = TextEditingController();
@@ -20,7 +20,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   String? _selectedUniversity;
   String? _selectedDepartment;
 
-  // Liste Verileri
   final List<String> _universities = [
     'Zonguldak Bülent Ecevit Üniversitesi',
     'İstanbul Teknik Üniversitesi',
@@ -48,6 +47,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return regex.hasMatch(password);
   }
 
+  // --- KAYIT İŞLEMİ ---
   Future<void> _handleSignup() async {
   const String apiUrl = "http://192.168.67.144:8000/signup"; 
   try {
@@ -77,13 +77,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
     } catch (e) {
       _showSnackBar("Bağlantı hatası: Sunucu açık mı?", Colors.orange);
+    // ApiService içindeki metodu çağırıyoruz
+    bool success = await ApiService.signup(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      university: _selectedUniversity ?? "",
+      department: _selectedDepartment ?? "",
+    );
+
+    if (success) {
+      _showSnackBar("Başarıyla üye oldun! Giriş yapabilirsin.", Colors.green);
+      if (mounted) Navigator.pop(context); 
+    } else {
+      _showSnackBar("Kayıt başarısız. Bu e-posta zaten kullanımda olabilir.", Colors.red);
     }
   }
 
   void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: color),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -169,6 +190,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Widget _buildTextField(String label, IconData icon,
       {bool isPassword = false, required TextEditingController controller}) {
+  // --- Yardımcı Widgetlar ---
+  Widget _buildTextField(String label, IconData icon, {bool isPassword = false, required TextEditingController controller}) {
     return TextFormField(
       controller: controller,
       // Eğer bu bir şifre alanıysa ve _obscurePassword true ise gizle

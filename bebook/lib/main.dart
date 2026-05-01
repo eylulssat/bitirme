@@ -32,7 +32,9 @@ class MyApp extends StatelessWidget {
 
 class ApiService {
   static const String baseUrl = "http://192.168.67.144:8000";
+  static const String baseUrl = "http://192.168.1.30:8000";  // LOKAL IP KORUNDU 
 
+ 
   Future<Map<String, dynamic>> createPayment(
       int userId, int bookId, double price) async {
     final url = Uri.parse('$baseUrl/create-payment');

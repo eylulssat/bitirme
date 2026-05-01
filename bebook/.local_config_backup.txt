@@ -1,0 +1,19 @@
+# LOKAL AYARLAR YEDEK - ASLA DEĞİŞTİRME!
+# Bu dosya merge işlemi sırasında ayarlarınızı korumak için oluşturuldu
+
+## Flutter API Base URL
+api_service.dart: baseUrl = "http://192.168.1.30:8000"
+main.dart: baseUrl = "http://192.168.1.30:8000"
+login_screen.dart: apiUrl = "http://192.168.1.30:8000/login"
+
+## Backend Database
+host = "localhost"
+database = "bebook"
+user = "postgres"
+password = "senem2003"
+port = "5432"
+
+## Diğer Önemli Ayarlar
+- UPLOAD_DIR yapısı korunmalı
+- Favoriler sistemi korunmalı
+- Görsel yükleme sistemi korunmalı

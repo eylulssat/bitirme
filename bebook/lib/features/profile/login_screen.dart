@@ -37,6 +37,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     // Android Emulator için: 10.0.2.2, Gerçek cihaz/Web için kendi IP'n
     const String apiUrl = "http://192.168.67.144:8000/login";
+    // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
+    const String apiUrl = "http://192.168.1.30:8000/login"; 
 
     setState(() => _isLoading = true);
 
@@ -92,6 +94,22 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             (route) => false,
           );
+        
+        // Kullanıcı bilgilerini SharedPreferences'a kaydet
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('user_id', data['user_id']);
+        await prefs.setString('user_email', data['user_email']);
+        await prefs.setString('university', data['university']);
+        await prefs.setString('department', data['department']);
+        
+        if (mounted) {
+          // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz
+          Navigator.pop(context, {
+            "user_id": data['user_id'], // Bu çok önemli!
+            "user_email": data['user_email'],
+            "university": data['university'],
+            "department": data['department'],
+          });
         }
       } else {
         final errorData = jsonDecode(response.body);
