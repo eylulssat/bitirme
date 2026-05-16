@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
-import 'package:bebook/features/cart/cart_screen.dart';
-import 'package:bebook/features/home/home_screen.dart';
-import 'package:bebook/features/post_ad/add_product_screen.dart';
-import 'package:bebook/features/profile/profile_screen.dart'; 
+import 'package:bebook/features/cart/premium_cart_screen.dart'; // 💎 Premium sepet
+import 'package:bebook/features/home/premium_home_screen.dart'; // 💎 Premium ana sayfa
+import 'package:bebook/features/post_ad/premium_add_product_screen.dart'; // 💎 Premium ilan ver
+import 'package:bebook/features/profile/profile_screen.dart';
+import 'package:bebook/core/theme/app_theme.dart'; // 💎 Premium tema 
 
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
@@ -15,24 +16,18 @@ class MainWrapper extends StatefulWidget {
 class _MainWrapperState extends State<MainWrapper> { 
   int _selectedIndex = 0;
 
-  // 🔥 1. ADIM: ProfileScreen'in içindeki fonksiyonlara erişmek için bir Key tanımlıyoruz.
-  // ProfileScreen'in State sınıfının public olması (adı başında _ olmaması) gerekebilir.
   final GlobalKey<ProfileScreenState> _profileKey = GlobalKey<ProfileScreenState>();
+  final GlobalKey<PremiumHomeScreenState> _homeKey = GlobalKey<PremiumHomeScreenState>(); // 💎 Premium
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF); 
-
     final List<Widget> _pages = [
-      const HomeScreen(),                 // 0: Keşfet
+      PremiumHomeScreen(key: _homeKey),   // 💎 Premium ana sayfa
       const Center(child: Text("Arama")), // 1: Ara
       const SizedBox(),                   // 2: Sat
-      CartScreen(onDiscoverPressed: () {  // 3: Sepetim
-        setState(() {
-          _selectedIndex = 0;
-        });
+      PremiumCartScreen(onDiscoverPressed: () { // 💎 Premium sepet
+        setState(() => _selectedIndex = 0);
       }),
-      // 🔥 2. ADIM: Key'i buraya bağlıyoruz
       ProfileScreen(key: _profileKey),    // 4: Profil
     ];
 
@@ -43,24 +38,22 @@ class _MainWrapperState extends State<MainWrapper> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(blurRadius: 20, color: Colors.black.withValues(alpha: 0.5))
-          ],
+          color: AppTheme.neutralWhite, // ✅ Modern renk
+          boxShadow: AppTheme.shadowLG,  // ✅ Modern gölge
         ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 8),
             child: GNav(
-              rippleColor: Colors.grey[300]!,
-              hoverColor: Colors.grey[100]!,
+              rippleColor: AppTheme.primaryIndigo.withOpacity(0.1),
+              hoverColor: AppTheme.primaryIndigo.withOpacity(0.05),
               gap: 8,
-              activeColor: primaryColor,
+              activeColor: AppTheme.primaryIndigo, // ✅ Modern renk
               iconSize: 24,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               duration: const Duration(milliseconds: 400),
-              tabBackgroundColor: primaryColor.withValues(alpha: 0.5),
-              color: Colors.grey[600],
+              tabBackgroundColor: AppTheme.primaryIndigo.withOpacity(0.1),
+              color: AppTheme.neutralDark,
               tabs: const [
                 GButton(icon: Icons.home_rounded,  ),
                 GButton(icon: Icons.search_rounded, ),
@@ -74,23 +67,23 @@ class _MainWrapperState extends State<MainWrapper> {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AddProductScreen(),
+                      builder: (_) => PremiumAddProductScreen( // 💎 Premium ilan ver
+                        userId: _profileKey.currentState?.userId,
+                        userEmail: _profileKey.currentState?.userEmail,
+                      ),
                     ),
                   );
-
                   if (result == true) {
-                    // 🔥 3. ADIM: Profil sayfasındaki yenileme fonksiyonunu tetikliyoruz
-                    // ProfileScreen içinde ilanları çeken fonksiyonun adının 'fetchUserBooks' olduğunu varsayıyorum.
-                    _profileKey.currentState?.fetchMyBooks(); 
-
-                    setState(() {
-                      _selectedIndex = 4; // Profile'a git
-                    });
+                    _profileKey.currentState?.fetchMyBooks();
+                    setState(() => _selectedIndex = 4);
                   }
                 } else {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
+                  // Profil sekmesinden anasayfaya geçilince yenile
+                  // (giriş/çıkış yapılmış olabilir)
+                  if (_selectedIndex == 4 && index == 0) {
+                    _homeKey.currentState?.refreshAfterLogin();
+                  }
+                  setState(() => _selectedIndex = index);
                 }
               },
             ),

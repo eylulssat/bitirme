@@ -258,5 +258,6 @@ def scan_isbn():
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8001)
+    print("🚀 ISBN Backend başlatılıyor: http://10.108.206.156:8001")
+    app.run(host="0.0.0.0", port=8001, debug=False, threaded=True)
 

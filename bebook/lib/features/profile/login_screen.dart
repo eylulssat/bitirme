@@ -34,8 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
-    // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
-    const String apiUrl = "http://192.168.1.30:8000/login"; 
+    // LOKAL IP ADRESİNİZ - GÜNCELLENDİ
+    const String apiUrl = "http://10.108.206.156:8000/login"; 
 
     setState(() => _isLoading = true);
 
@@ -58,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('user_email', data['user_email']);
         await prefs.setString('university', data['university']);
         await prefs.setString('department', data['department']);
+        await prefs.setBool('is_logged_in', true); // GİRİŞ BAYRAGI
         
         if (mounted) {
           // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz

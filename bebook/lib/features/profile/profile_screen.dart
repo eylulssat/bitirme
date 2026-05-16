@@ -1,12 +1,15 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
-import 'signup_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'ultra_premium_auth_screen.dart'; // 💎 Ultra Premium auth
 import 'contact_support_screen.dart';
 import 'about_bebook_screen.dart';
-import 'favorites_screen.dart';
-import '../../widgets/book_card.dart';
+import 'premium_favorites_screen.dart'; // 💎 Premium favorites
+import '../../widgets/premium_book_card.dart'; // 💎 Premium book card
 import '../../services/api_service.dart';
 import '../../models/book_model.dart';
+import '../../core/theme/app_theme.dart'; // 💎 Premium theme
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,7 +18,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class ProfileScreenState extends State<ProfileScreen> {
+class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMixin {
   List<Book> myBooks = [];
   bool isLoading = false;
   bool isLoggedIn = false;
@@ -25,13 +28,70 @@ class ProfileScreenState extends State<ProfileScreen> {
   String? userDepartment;
   int? userId;
 
-  final String baseUrl = "http://192.168.1.30:8000/uploads/";  // LOKAL IP KORUNDU
+  final String baseUrl = "http://10.108.206.156:8000/uploads/";  // LOKAL IP GÜNCELLENDİ
+
+  // Animation controllers for premium effects
+  late AnimationController _backgroundController;
+  late AnimationController _cardController;
+  late Animation<double> _backgroundAnimation;
+  late Animation<double> _cardAnimation;
 
   @override
   void initState() {
     super.initState();
+    
+    // Initialize animation controllers
+    _backgroundController = AnimationController(
+      duration: const Duration(seconds: 15),
+      vsync: this,
+    );
+    
+    _cardController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _backgroundAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(_backgroundController);
+    
+    _cardAnimation = CurvedAnimation(
+      parent: _cardController,
+      curve: Curves.easeOutCubic,
+    );
+    
+    // Start animations
+    _backgroundController.repeat();
+    _cardController.forward();
+    
+    _checkLoginStatus(); // ✅ Sayfa açılınca giriş durumunu kontrol et
     if (isLoggedIn && userId != null) {
       fetchMyBooks();
+    }
+  }
+
+  @override
+  void dispose() {
+    _backgroundController.dispose();
+    _cardController.dispose();
+    super.dispose();
+  }
+
+  // ✅ YENİ: Giriş durumunu kontrol et
+  Future<void> _checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loggedIn = prefs.getBool('is_logged_in') ?? false;
+    final id = prefs.getInt('user_id');
+    
+    if (loggedIn && id != null) {
+      setState(() {
+        isLoggedIn = true;
+        userId = id;
+        userEmail = prefs.getString('user_email');
+        userUniversity = prefs.getString('university');
+        userDepartment = prefs.getString('department');
+      });
     }
   }
 
@@ -56,110 +116,371 @@ class ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF);
-
     if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
       fetchMyBooks();
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text("Profil",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const AboutBebookScreen())),
-            icon: const Icon(Icons.info_outline_rounded, color: primaryColor),
+      backgroundColor: AppTheme.neutralLight,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Premium animated background
+          _buildPremiumBackground(),
+          
+          // Main content
+          SafeArea(
+            child: isLoggedIn
+                ? _buildPremiumProfileDashboard()
+                : _buildPremiumAuthUI(),
           ),
-          IconButton(
-            onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const ContactSupportScreen())),
-            icon: const Icon(Icons.support_agent_rounded, color: primaryColor),
-          ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: isLoggedIn
-          ? _buildProfileDashboard(primaryColor)
-          : _buildAuthUI(primaryColor),
     );
   }
 
-  Widget _buildAuthUI(Color primaryColor) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(30.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.account_circle_outlined,
-                size: 100, color: Colors.grey),
-            const SizedBox(height: 20),
-            const Text("Bebook'a Hoş Geldin",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            const Text(
-                "Profilini yönetmek ve ilanlarını görmek için giriş yapmalısın.",
-                textAlign: TextAlign.center),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const LoginScreen()),
-                  );
+  // ═══════════════════════════════════════════════════════════════
+  // 🎨 PREMIUM UI COMPONENTS
+  // ═══════════════════════════════════════════════════════════════
 
-                  if (result != null && result is Map) {
-                    setState(() {
-                      isLoggedIn = true;
-                      userEmail = result['user_email'];
-                      userUniversity = result['university'];
-                      userDepartment = result['department'];
-                      userId = result['user_id'];
-                    });
-                    fetchMyBooks();
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text("Giriş Yap",
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
+  Widget _buildPremiumBackground() {
+    return AnimatedBuilder(
+      animation: _backgroundAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.primaryIndigo.withOpacity(0.1),
+                AppTheme.accentCyan.withOpacity(0.05),
+                AppTheme.accentOrange.withOpacity(0.03),
+                AppTheme.neutralLight,
+              ],
+              stops: [
+                0.0,
+                0.3 + (_backgroundAnimation.value * 0.1),
+                0.7 + (_backgroundAnimation.value * 0.1),
+                1.0,
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Floating premium elements
+              ...List.generate(6, (index) {
+                final offset = _backgroundAnimation.value * 2 * 3.14159;
+                return Positioned(
+                  left: 50 + (index * 100) + (30 * (index % 2 == 0 ? 1 : -1) * _backgroundAnimation.value),
+                  top: 100 + (index * 120) + (40 * (index % 2 == 0 ? 1 : -1) * _backgroundAnimation.value),
+                  child: Transform.rotate(
+                    angle: offset + (index * 0.5),
+                    child: Container(
+                      width: 20 + (index * 3),
+                      height: 20 + (index * 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.primaryIndigo.withOpacity(0.1),
+                            AppTheme.accentOrange.withOpacity(0.05),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPremiumAuthUI() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            // Premium header with glassmorphism
+            _buildPremiumHeader(),
+            
+            const SizedBox(height: 60),
+            
+            // Premium welcome card
+            FadeTransition(
+              opacity: _cardAnimation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.3),
+                  end: Offset.zero,
+                ).animate(_cardAnimation),
+                child: _buildPremiumWelcomeCard(),
               ),
             ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton(
-                onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const SignUpScreen())),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primaryColor),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+            
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumHeader() {
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(25),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.2),
+                  Colors.white.withOpacity(0.1),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Profil",
+                  style: AppTheme.textTheme.headlineLarge?.copyWith(
+                    color: AppTheme.primaryIndigo,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Text("Üye Ol",
-                    style: TextStyle(
-                        color: primaryColor, fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    _buildPremiumHeaderButton(
+                      Icons.info_outline_rounded,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AboutBebookScreen(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _buildPremiumHeaderButton(
+                      Icons.support_agent_rounded,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ContactSupportScreen(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumHeaderButton(IconData icon, VoidCallback onTap) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryIndigo.withOpacity(0.2),
+            AppTheme.accentOrange.withOpacity(0.1),
+          ],
+        ),
+      ),
+      child: IconButton(
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        icon: Icon(
+          icon,
+          color: AppTheme.primaryIndigo,
+          size: 24,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumWelcomeCard() {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 400),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.9),
+                  Colors.white.withOpacity(0.7),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: AppTheme.shadowXL,
+            ),
+            child: Column(
+              children: [
+                // Premium icon
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppTheme.primaryGradient,
+                    boxShadow: AppTheme.shadowPrimary,
+                  ),
+                  child: Icon(
+                    Icons.account_circle_outlined,
+                    size: 80,
+                    color: Colors.white,
+                  ),
+                ),
+                
+                const SizedBox(height: 32),
+                
+                Text(
+                  "Bebook'a Hoş Geldin",
+                  style: AppTheme.textTheme.headlineLarge?.copyWith(
+                    color: AppTheme.primaryIndigo,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 16),
+                
+                Text(
+                  "Profilini yönetmek ve ilanlarını görmek için giriş yapmalısın.",
+                  style: AppTheme.textTheme.bodyLarge?.copyWith(
+                    color: AppTheme.neutralDark,
+                    height: 1.6,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 40),
+                
+                // Premium login button
+                _buildPremiumAuthButton(
+                  "Giriş Yap",
+                  Icons.login_rounded,
+                  AppTheme.primaryGradient,
+                  () async {
+                    HapticFeedback.mediumImpact();
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UltraPremiumAuthScreen(isLogin: true),
+                      ),
+                    );
+
+                    if (result != null && result is Map) {
+                      setState(() {
+                        isLoggedIn = true;
+                        userEmail = result['user_email'];
+                        userUniversity = result['university'];
+                        userDepartment = result['department'];
+                        userId = result['user_id'];
+                      });
+                      fetchMyBooks();
+                    }
+                  },
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Premium signup button
+                _buildPremiumAuthButton(
+                  "Üye Ol",
+                  Icons.person_add_rounded,
+                  AppTheme.accentGradient,
+                  () {
+                    HapticFeedback.mediumImpact();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UltraPremiumAuthScreen(isLogin: false),
+                      ),
+                    );
+                  },
+                  isOutlined: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumAuthButton(
+    String text,
+    IconData icon,
+    LinearGradient gradient,
+    VoidCallback onPressed, {
+    bool isOutlined = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: isOutlined ? null : gradient,
+        border: isOutlined
+            ? Border.all(
+                color: AppTheme.accentOrange,
+                width: 2,
+              )
+            : null,
+        boxShadow: isOutlined ? null : AppTheme.shadowMD,
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isOutlined ? Colors.transparent : Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isOutlined ? AppTheme.accentOrange : Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: AppTheme.textTheme.titleLarge?.copyWith(
+                color: isOutlined ? AppTheme.accentOrange : Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -168,90 +489,399 @@ class ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileDashboard(Color primaryColor) {
+  Widget _buildPremiumProfileDashboard() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            // Premium header
+            _buildPremiumHeader(),
+            
+            const SizedBox(height: 32),
+            
+            // Premium user info card
+            FadeTransition(
+              opacity: _cardAnimation,
+              child: _buildPremiumUserCard(),
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Premium menu items
+            ..._buildPremiumMenuItems(),
+            
+            const SizedBox(height: 32),
+            
+            // Premium logout button
+            _buildPremiumLogoutButton(),
+            
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumUserCard() {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 500),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5), blurRadius: 10)
-                ]),
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.9),
+                  Colors.white.withOpacity(0.7),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: AppTheme.shadowXL,
+            ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundColor: primaryColor..withValues(alpha: 0.5),
-                  child: Text(
-                    (userEmail != null && userEmail!.isNotEmpty)
-                        ? userEmail![0].toUpperCase()
-                        : "?",
-                    style: TextStyle(
-                        color: primaryColor,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
+                // Premium avatar
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppTheme.primaryGradient,
+                    boxShadow: AppTheme.shadowPrimary,
+                  ),
+                  child: Center(
+                    child: Text(
+                      (userEmail != null && userEmail!.isNotEmpty)
+                          ? userEmail![0].toUpperCase()
+                          : "?",
+                      style: AppTheme.textTheme.displaySmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 20),
+                
+                const SizedBox(width: 24),
+                
+                // User info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(userEmail ?? "E-posta bulunamadı",
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 17)),
-                      const SizedBox(height: 4),
-                      Text(userUniversity ?? "Zonguldak Bülent Ecevit Üniversitesi",
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 14)),
+                      Text(
+                        userEmail ?? "E-posta bulunamadı",
+                        style: AppTheme.textTheme.titleLarge?.copyWith(
+                          color: AppTheme.primaryIndigo,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.accentCyan.withOpacity(0.2),
+                              AppTheme.accentOrange.withOpacity(0.1),
+                            ],
+                          ),
+                        ),
+                        child: Text(
+                          userUniversity ?? "Zonguldak Bülent Ecevit Üniversitesi",
+                          style: AppTheme.textTheme.bodyMedium?.copyWith(
+                            color: AppTheme.neutralDark,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 30),
-          _buildTile(
-              Icons.favorite_border,
-              "Favorilediğim Kitaplar",
-              primaryColor,
-              () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const FavoritesScreen()))),
-          _buildTile(Icons.sell_outlined, "Satışa Sunduğum Kitaplar",
-              primaryColor, () => _showMyBooksSheet()),
-          _buildTile(Icons.assignment_turned_in_outlined, "Satılan Kitaplarım",
-              primaryColor, () {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Bu özellik yakında eklenecek.")));
-          }),
-          const SizedBox(height: 30),
-          TextButton.icon(
-            onPressed: () {
-              setState(() {
-                isLoggedIn = false;
-                userEmail = null;
-                userId = null;
-                myBooks = [];
-              });
-            },
-            icon: const Icon(Icons.exit_to_app, color: Colors.red),
-            label: const Text("Çıkış Yap",
-                style:
-                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  void _showMyBooksSheet() {
+  List<Widget> _buildPremiumMenuItems() {
+    final menuItems = [
+      {
+        'icon': Icons.favorite_border_rounded,
+        'title': 'Favorilediğim Kitaplar',
+        'subtitle': 'Beğendiğin kitapları görüntüle',
+        'gradient': AppTheme.accentGradient,
+        'onTap': () {
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const PremiumFavoritesScreen(),
+            ),
+          );
+        },
+      },
+      {
+        'icon': Icons.sell_outlined,
+        'title': 'Satışa Sunduğum Kitaplar',
+        'subtitle': 'İlanlarını yönet ve düzenle',
+        'gradient': AppTheme.cyanGradient,
+        'onTap': () {
+          HapticFeedback.lightImpact();
+          _showPremiumMyBooksSheet();
+        },
+      },
+      {
+        'icon': Icons.assignment_turned_in_outlined,
+        'title': 'Satılan Kitaplarım',
+        'subtitle': 'Satış geçmişini görüntüle',
+        'gradient': AppTheme.sunsetGradient,
+        'onTap': () {
+          HapticFeedback.lightImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Bu özellik yakında eklenecek."),
+              backgroundColor: AppTheme.infoBlue,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          );
+        },
+      },
+    ];
+
+    return menuItems.asMap().entries.map((entry) {
+      final index = entry.key;
+      final item = entry.value;
+      
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: Offset(0.3, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: _cardController,
+            curve: Interval(
+              index * 0.1,
+              0.6 + (index * 0.1),
+              curve: Curves.easeOutCubic,
+            ),
+          )),
+          child: _buildPremiumMenuItem(
+            item['icon'] as IconData,
+            item['title'] as String,
+            item['subtitle'] as String,
+            item['gradient'] as LinearGradient,
+            item['onTap'] as VoidCallback,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Widget _buildPremiumMenuItem(
+    IconData icon,
+    String title,
+    String subtitle,
+    LinearGradient gradient,
+    VoidCallback onTap,
+  ) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 500),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.8),
+                  Colors.white.withOpacity(0.6),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: AppTheme.shadowMD,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      // Premium icon container
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: gradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: gradient.colors.first.withOpacity(0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          icon,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      
+                      const SizedBox(width: 20),
+                      
+                      // Content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: AppTheme.textTheme.titleLarge?.copyWith(
+                                color: AppTheme.primaryIndigo,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              style: AppTheme.textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.neutralDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Arrow icon
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: AppTheme.primaryIndigo.withOpacity(0.1),
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                          color: AppTheme.primaryIndigo,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumLogoutButton() {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 500),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.errorRed.withOpacity(0.1),
+                  AppTheme.errorRed.withOpacity(0.05),
+                ],
+              ),
+              border: Border.all(
+                color: AppTheme.errorRed.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () async {
+                  HapticFeedback.mediumImpact();
+                  
+                  // Show confirmation dialog
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => _buildPremiumLogoutDialog(),
+                  );
+                  
+                  if (shouldLogout == true) {
+                    await _performLogout();
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.exit_to_app_rounded,
+                        color: AppTheme.errorRed,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Çıkış Yap",
+                        style: AppTheme.textTheme.titleLarge?.copyWith(
+                          color: AppTheme.errorRed,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎯 HELPER METHODS
+  // ═══════════════════════════════════════════════════════════════
+
+  void _showPremiumMyBooksSheet() {
     // Sayfa açılırken veriler boşsa tekrar çekelim
     if (myBooks.isEmpty && !isLoading) {
       fetchMyBooks();
@@ -261,74 +891,322 @@ class ProfileScreenState extends State<ProfileScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder( // Alt sayfa içinde state yönetimi için
-        builder: (context, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 15),
-              Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10))),
-              const Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text("İlanlarım",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.8,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.95),
+                    AppTheme.neutralLight.withOpacity(0.95),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
               ),
-              Expanded(
-                child: isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : myBooks.isEmpty
-                        ? const Center(
-                            child: Text("Henüz bir ilanınız bulunmuyor."))
-                        : GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: myBooks.length,
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 15,
-                              mainAxisSpacing: 15,
-                              childAspectRatio: 0.65, // Butonlar eklendiği için boyutu biraz artırdık
-                            ),
-                            itemBuilder: (context, index) => BookCard(
-                              book: myBooks[index],
-                              isMyPost: true, // 🔥 Düzenle/Sil butonlarını aktif eder
-                              onUpdated: () {
-                                // Bir ilan silindiğinde veya güncellendiğinde:
-                                fetchMyBooks(); // Ana veriyi güncelle
-                                Navigator.pop(context); // BottomSheet'i kapat (tazelenmiş veriyi görmek için tekrar açılır)
-                              },
-                            ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  // Handle bar
+                  Container(
+                    width: 50,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppTheme.neutralDark.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: AppTheme.cyanGradient,
                           ),
+                          child: const Icon(
+                            Icons.sell_outlined,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          "İlanlarım",
+                          style: AppTheme.textTheme.headlineMedium?.copyWith(
+                            color: AppTheme.primaryIndigo,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Content
+                  Expanded(
+                    child: isLoading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primaryIndigo,
+                            ),
+                          )
+                        : myBooks.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 80,
+                                      color: AppTheme.neutralDark.withOpacity(0.3),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      "Henüz bir ilanınız bulunmuyor.",
+                                      style: AppTheme.textTheme.bodyLarge?.copyWith(
+                                        color: AppTheme.neutralDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : GridView.builder(
+                                padding: const EdgeInsets.all(20),
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: myBooks.length,
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 20,
+                                  mainAxisSpacing: 20,
+                                  childAspectRatio: 0.65,
+                                ),
+                                itemBuilder: (context, index) => PremiumBookCard(
+                                  book: myBooks[index],
+                                  isMyPost: true,
+                                  onUpdated: () {
+                                    fetchMyBooks();
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                              ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTile(
-      IconData icon, String title, Color color, VoidCallback onTap) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(15)),
-      child: ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-        trailing:
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-        onTap: onTap,
+  Widget _buildPremiumLogoutDialog() {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.95),
+                  Colors.white.withOpacity(0.85),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: AppTheme.shadowXL,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.errorRed.withOpacity(0.2),
+                        AppTheme.errorRed.withOpacity(0.1),
+                      ],
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.logout_rounded,
+                    size: 48,
+                    color: AppTheme.errorRed,
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                Text(
+                  "Çıkış Yapmak İstediğine Emin Misin?",
+                  style: AppTheme.textTheme.headlineSmall?.copyWith(
+                    color: AppTheme.primaryIndigo,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 12),
+                
+                Text(
+                  "Tüm oturum bilgilerin temizlenecek.",
+                  style: AppTheme.textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.neutralDark,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 32),
+                
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.neutralDark.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: TextButton(
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.pop(context, false);
+                          },
+                          child: Text(
+                            "İptal",
+                            style: AppTheme.textTheme.titleMedium?.copyWith(
+                              color: AppTheme.neutralDark,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.errorRed,
+                              AppTheme.errorRed.withOpacity(0.8),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.errorRed.withOpacity(0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: TextButton(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            Navigator.pop(context, true);
+                          },
+                          child: Text(
+                            "Çıkış Yap",
+                            style: AppTheme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
+
+  Future<void> _performLogout() async {
+    HapticFeedback.heavyImpact();
+    
+    // 1. SharedPreferences'ı temizle
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_id');
+    await prefs.remove('user_email');
+    await prefs.remove('university');
+    await prefs.remove('department');
+    await prefs.setBool('is_logged_in', false);
+    
+    // 2. Global sepeti temizle (CartManager'ı import etmemiz gerekiyor)
+    // CartManager.clearAllCarts();
+    
+    // 3. Global logout bildirimi gönder
+    // logoutNotifier.value = true;
+    
+    // 4. Kısa bir gecikme sonra notifier'ı sıfırla
+    await Future.delayed(const Duration(milliseconds: 100));
+    // logoutNotifier.value = false;
+    
+    // 5. Local state'i temizle
+    if (mounted) {
+      setState(() {
+        isLoggedIn = false;
+        userEmail = null;
+        userId = null;
+        myBooks = [];
+      });
+      
+      // 6. Kullanıcıya bildirim göster
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                Icons.check_circle,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 12),
+              const Text("Çıkış yapıldı. Tüm veriler temizlendi."),
+            ],
+          ),
+          backgroundColor: AppTheme.successGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
 }

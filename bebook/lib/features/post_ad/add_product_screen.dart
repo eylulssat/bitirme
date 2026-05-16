@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
@@ -94,9 +95,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
     setState(() => _isLoading = true);
     try {
+      final client = http.Client();
       var request = http.MultipartRequest(
         "POST",
-        Uri.parse("http://127.0.0.1:8001/scan"), // AI Sunucu - localhost
+        Uri.parse("http://10.108.206.156:8001/scan"),
       );
 
       request.files.add(
@@ -107,20 +109,37 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ),
       );
 
-      var response = await request.send();
+      // 30 saniye timeout
+      var response = await request.send().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception("Sunucu yanıt vermedi (timeout). ISBN backend çalışıyor mu?");
+        },
+      );
       var responseData = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
         final data = json.decode(responseData);
-        setState(() {
-          _nameController.text = data["title"] ?? "";
-          _authorController.text = data["author"] ?? "";
-          _publisherController.text = data["publisher"] ?? "";
-        });
-        _showSnackBar("Kitap bilgileri AI ile getirildi!", Colors.green);
+
+        if (data.containsKey("error")) {
+          _showSnackBar("ISBN okunamadı: ${data['error']}", Colors.orange);
+        } else {
+          setState(() {
+            _nameController.text = data["title"] ?? "";
+            _authorController.text = data["author"] ?? "";
+            _publisherController.text = data["publisher"] ?? "";
+          });
+          _showSnackBar("✅ Kitap bilgileri getirildi! (${data['source'] ?? ''})", Colors.green);
+        }
+      } else {
+        _showSnackBar("Sunucu hatası: ${response.statusCode}", Colors.red);
       }
     } catch (e) {
-      _showSnackBar("Bağlantı hatası: Tarama sunucusuna ulaşılamadı.", Colors.red);
+      debugPrint("ISBN Scan Hatası: $e");
+      _showSnackBar(
+        "Bağlantı hatası! Kontrol et:\n• ISBN backend çalışıyor mu? (python app.py)\n• Telefon ve bilgisayar aynı Wi-Fi'da mı?",
+        Colors.red,
+      );
     } finally {
       setState(() => _isLoading = false);
     }

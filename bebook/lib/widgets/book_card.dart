@@ -6,7 +6,52 @@ import '../features/post_ad/edit_book_screen.dart';
 import '../features/home/book_detail_screen.dart';
 
 List<Book> favoriteBooks = [];
-List<Book> cartBooks = []; // Sepet için global liste
+
+// ✅ YENİ: Kullanıcı bazlı sepet yönetimi
+class CartManager {
+  static final Map<int, List<Book>> _userCarts = {};
+  
+  static List<Book> getCart(int? userId) {
+    if (userId == null) return [];
+    return _userCarts[userId] ?? [];
+  }
+  
+  static void addToCart(int? userId, Book book) {
+    if (userId == null) return;
+    _userCarts[userId] ??= [];
+    if (!_userCarts[userId]!.any((item) => item.id == book.id)) {
+      _userCarts[userId]!.add(book);
+    }
+  }
+  
+  static void removeFromCart(int? userId, int bookId) {
+    if (userId == null) return;
+    _userCarts[userId]?.removeWhere((book) => book.id == bookId);
+  }
+  
+  static void clearCart(int? userId) {
+    if (userId == null) return;
+    _userCarts[userId]?.clear();
+  }
+  
+  static void clearAllCarts() {
+    _userCarts.clear();
+  }
+}
+
+// ✅ ESKI: Global sepet listesi (geriye dönük uyumluluk için)
+List<Book> get cartBooks {
+  // Mevcut kullanıcının sepetini döndür
+  return CartManager.getCart(_currentUserId);
+}
+
+int? _currentUserId;
+
+// Global favori değişiklik bildirimi için ValueNotifier
+final ValueNotifier<int> favoriteChangeNotifier = ValueNotifier<int>(0);
+
+// Global logout bildirimi için ValueNotifier
+final ValueNotifier<bool> logoutNotifier = ValueNotifier<bool>(false);
 
 class BookCard extends StatefulWidget {
   final Book book;
@@ -33,6 +78,28 @@ class _BookCardState extends State<BookCard> {
   void initState() {
     super.initState();
     _loadUserAndCheckFavorite();
+    
+    // Logout dinleyicisi ekle
+    logoutNotifier.addListener(_handleLogout);
+  }
+
+  @override
+  void dispose() {
+    logoutNotifier.removeListener(_handleLogout);
+    super.dispose();
+  }
+
+  void _handleLogout() {
+    if (logoutNotifier.value == true) {
+      // Logout yapıldığında tüm favori state'lerini temizle
+      if (mounted) {
+        setState(() {
+          _isFavorite = false;
+          _currentUserId = null;
+          _isLoadingFavorite = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadUserAndCheckFavorite() async {
@@ -40,7 +107,11 @@ class _BookCardState extends State<BookCard> {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getInt('user_id');
       if (userId != null) {
-        setState(() => _currentUserId = userId);
+        setState(() {
+          _currentUserId = userId;
+          // ✅ Global _currentUserId'yi güncelle (sepet için)
+          _currentUserId = userId;
+        });
         final isFav = await ApiService.checkFavorite(userId, widget.book.id);
         setState(() {
           _isFavorite = isFav;
@@ -67,14 +138,22 @@ class _BookCardState extends State<BookCard> {
     final result = await ApiService.toggleFavorite(_currentUserId!, widget.book.id);
     if (result != null && result['status'] == 'added') {
       setState(() => _isFavorite = true);
+      // Favoriler listesini güncelle
+      favoriteChangeNotifier.value++;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Favorilere eklendi ❤️"), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
       );
+      // onUpdated callback'i varsa çağır
+      widget.onUpdated?.call();
     } else if (result != null && result['status'] == 'removed') {
       setState(() => _isFavorite = false);
+      // Favoriler listesini güncelle
+      favoriteChangeNotifier.value++;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Favorilerden çıkarıldı"), backgroundColor: Colors.grey, duration: Duration(seconds: 1)),
       );
+      // onUpdated callback'i varsa çağır
+      widget.onUpdated?.call();
     }
   }
 
@@ -237,11 +316,27 @@ class _BookCardState extends State<BookCard> {
                           width: double.infinity,
                           height: 32,
                           child: ElevatedButton(
-                            onPressed: () {
-                              // Sepete ekleme - detay sayfasına gitmemesi için stopPropagation
-                              final isAlreadyInCart = cartBooks.any((item) => item.id == widget.book.id);
+                            onPressed: () async {
+                              // ✅ Kullanıcı kontrolü
+                              final prefs = await SharedPreferences.getInstance();
+                              final userId = prefs.getInt('user_id');
+                              
+                              if (userId == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Sepete eklemek için giriş yapmalısınız"),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+                              
+                              // ✅ Kullanıcı bazlı sepet kontrolü
+                              final userCart = CartManager.getCart(userId);
+                              final isAlreadyInCart = userCart.any((item) => item.id == widget.book.id);
+                              
                               if (!isAlreadyInCart) {
-                                cartBooks.add(widget.book);
+                                CartManager.addToCart(userId, widget.book);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text("${widget.book.title} sepete eklendi!"),

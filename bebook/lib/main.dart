@@ -3,8 +3,12 @@ import 'features/main_wrapper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'features/payment/payment_web_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'core/theme/app_theme.dart'; // ✅ Modern tema
 
-void main() {
+void main() async {
+  // ✅ SharedPreferences kullanmak için gerekli
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -16,15 +20,83 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Bebook',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.indigo),
-      home: const MainWrapper(),
+      theme: AppTheme.lightTheme, // ✅ Modern tema aktif
+      // ✅ Auto-login kontrolü için SplashScreen
+      home: const SplashScreen(),
+    );
+  }
+}
+
+// ✅ YENİ: Auto-login kontrolü yapan Splash Screen
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    // Kısa bir gecikme (splash effect)
+    await Future.delayed(const Duration(seconds: 1));
+    
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+    final userId = prefs.getInt('user_id');
+    
+    if (mounted) {
+      if (isLoggedIn && userId != null) {
+        // ✅ Kullanıcı giriş yapmış, direkt MainWrapper'a git
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainWrapper()),
+        );
+      } else {
+        // ✅ Giriş yapılmamış, MainWrapper'a git (profil sekmesinde login gösterecek)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainWrapper()),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF6C63FF),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.book, size: 100, color: Colors.white),
+            SizedBox(height: 20),
+            Text(
+              'Bebook',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(height: 20),
+            CircularProgressIndicator(color: Colors.white),
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ------------------- API SERVİSİ -------------------
 class ApiService {
-  static const String baseUrl = "http://192.168.1.30:8000";  // LOKAL IP KORUNDU 
+  static const String baseUrl = "http://10.108.206.156:8000";  // LOKAL IP GÜNCELLENDİ 
 
  
   Future<Map<String, dynamic>> createPayment(

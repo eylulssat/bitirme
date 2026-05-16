@@ -20,6 +20,37 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   void initState() {
     super.initState();
     _loadFavorites();
+    
+    // Favori değişikliklerini dinle
+    favoriteChangeNotifier.addListener(_onFavoriteChanged);
+    
+    // Logout dinleyicisi ekle
+    logoutNotifier.addListener(_handleLogout);
+  }
+
+  @override
+  void dispose() {
+    favoriteChangeNotifier.removeListener(_onFavoriteChanged);
+    logoutNotifier.removeListener(_handleLogout);
+    super.dispose();
+  }
+
+  void _onFavoriteChanged() {
+    // Favori değiştiğinde listeyi yenile
+    _loadFavorites();
+  }
+
+  void _handleLogout() {
+    if (logoutNotifier.value == true) {
+      // Logout yapıldığında favorileri temizle
+      if (mounted) {
+        setState(() {
+          _favoriteBooks = [];
+          _currentUserId = null;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadFavorites() async {

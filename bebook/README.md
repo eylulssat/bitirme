@@ -75,7 +75,7 @@ pip install fastapi uvicorn psycopg2-binary bcrypt python-multipart iyzipay
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend `http://192.168.1.30:8000` adresinde çalışır.  
+Backend `http://192.168.1.19:8000` adresinde çalışır.  
 > ⚠️ IP adresini kendi ağınıza göre `backend/main.py` ve `lib/services/api_service.dart` dosyalarında güncelleyin.
 
 ---

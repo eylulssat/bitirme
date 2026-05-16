@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/book_card.dart';
+import '../../models/book_model.dart'; // ✅ Book import eklendi
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CartScreen extends StatefulWidget {
   final VoidCallback onDiscoverPressed;
@@ -16,13 +18,19 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   bool _isWaitingForPayment = false;
-  bool _isAgreedToTerms = false; // Sözleşme onayı için yeni değişken
-  int? lastOrderId; 
+  bool _isAgreedToTerms = false;
+  int? lastOrderId;
+  int? _currentUserId; // ✅ Kullanıcı ID'si
+  List<Book> _userCart = []; // ✅ Kullanıcıya özel sepet
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadUserCart();
+    
+    // ✅ Logout dinleyicisi ekle
+    logoutNotifier.addListener(_handleLogout);
   }
 
   @override
@@ -30,7 +38,30 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
     _nameController.dispose();
     _addressController.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    logoutNotifier.removeListener(_handleLogout);
     super.dispose();
+  }
+
+  // ✅ YENİ: Kullanıcı sepetini yükle
+  Future<void> _loadUserCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('user_id');
+    setState(() {
+      _currentUserId = userId;
+      _userCart = CartManager.getCart(userId);
+    });
+  }
+
+  // ✅ YENİ: Logout handler
+  void _handleLogout() {
+    if (logoutNotifier.value == true) {
+      if (mounted) {
+        setState(() {
+          _userCart = [];
+          _currentUserId = null;
+        });
+      }
+    }
   }
 
   @override
@@ -40,7 +71,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
       if (statusResult['status'] == 'SUCCESS') {
         setState(() {
-          cartBooks.clear(); 
+          // ✅ Kullanıcıya özel sepeti temizle
+          CartManager.clearCart(_currentUserId);
+          _userCart = [];
           _isWaitingForPayment = false;
         });
         
@@ -60,7 +93,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
   double _calculateTotal() {
     double total = 0;
-    for (var book in cartBooks) {
+    for (var book in _userCart) {
       total += double.tryParse(book.price.toString()) ?? 0;
     }
     return total;
@@ -89,7 +122,18 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   }
 
   void _completePayment(Color primaryColor) async {
-    if (cartBooks.isEmpty) return;
+    if (_userCart.isEmpty) return;
+    
+    // ✅ Giriş kontrolü
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Ödeme yapmak için giriş yapmalısınız"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     // Diyalog her açıldığında onay kutusunu sıfırlayalım
     _isAgreedToTerms = false; 
@@ -173,7 +217,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   }
 
   void _processPaymentRequest(Color primaryColor) async {
-    List<int> ids = cartBooks.map((b) => b.id).toList();
+    List<int> ids = _userCart.map((b) => b.id).toList();
     double total = _calculateTotal();
 
     showDialog(
@@ -184,12 +228,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
 
     try {
       final result = await ApiService.makeBulkPayment(
-        userId: 4,
+        userId: _currentUserId!, // ✅ Gerçek kullanıcı ID'si
         bookIds: ids,
         totalPrice: total,
-        // Backend güncellenince buraya:
-        // fullName: _nameController.text,
-        // address: _addressController.text,
       );
 
       if (!mounted) return;
@@ -221,6 +262,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF6C63FF);
+    
+    // ✅ Her build'de sepeti güncelle
+    _userCart = CartManager.getCart(_currentUserId);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -230,7 +274,7 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         elevation: 0,
         centerTitle: true,
       ),
-      body: cartBooks.isEmpty ? _buildEmptyState(primaryColor) : _buildCartItems(primaryColor),
+      body: _userCart.isEmpty ? _buildEmptyState(primaryColor) : _buildCartItems(primaryColor),
     );
   }
 
@@ -269,9 +313,9 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 15),
-            itemCount: cartBooks.length,
+            itemCount: _userCart.length,
             itemBuilder: (context, index) {
-              final book = cartBooks[index];
+              final book = _userCart[index];
               return Card(
                 margin: const EdgeInsets.only(bottom: 15),
                 elevation: 2,
@@ -292,7 +336,8 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
                     onPressed: () {
                       setState(() {
-                        cartBooks.removeAt(index);
+                        CartManager.removeFromCart(_currentUserId, book.id);
+                        _userCart = CartManager.getCart(_currentUserId);
                       });
                     },
                   ),

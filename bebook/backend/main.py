@@ -12,6 +12,19 @@ import shutil
 import uuid
 from typing import List, Optional
 
+# Öneri sistemi
+try:
+    import sys
+    import os as _os
+    sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from recommendation_engine import get_recommendations, is_logged_in
+    import pandas as pd
+    _recommendation_available = True
+    print("✅ Öneri sistemi yüklendi")
+except Exception as _e:
+    _recommendation_available = False
+    print(f"⚠️ Öneri sistemi yüklenemedi: {_e}")
+
 # ============================================
 # 1. APP OLUŞTURMA
 # ============================================
@@ -74,7 +87,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.1.30:8000"  # LOKAL IP KORUNDU 
+BASE_URL = "http://10.108.206.156:8000"  # LOKAL IP GÜNCELLENDİ 
 
 # ============================================
 # 4. CORS AYARLARI (Tek sefer)
@@ -676,5 +689,100 @@ async def check_favorite(user_id: int, book_id: int):
         )
         exists = cur.fetchone() is not None
         return {"is_favorite": exists}
+    finally:
+        conn.close()
+
+
+# ============================================
+# ÖNERİ SİSTEMİ ENDPOINTLERİ
+# ============================================
+
+@app.get("/recommendations/{user_id}")
+async def get_recommendations_endpoint(user_id: int, top_n: int = 5):
+    """
+    Giriş yapmış kullanıcıya bölümüne göre kişiselleştirilmiş kitap önerileri döndürür.
+    Veriler her istekte veritabanından dinamik olarak çekilir.
+    """
+    if not _recommendation_available:
+        raise HTTPException(
+            status_code=503,
+            detail="Öneri sistemi şu an kullanılamıyor. pandas ve scikit-learn kurulu olmalı."
+        )
+
+    # ── Kural 1: Giriş kontrolü ──────────────────────────────────────────
+    if not is_logged_in(user_id):
+        raise HTTPException(status_code=401, detail="Kişiselleştirilmiş öneriler için giriş yapmalısınız.")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # ── Tüm kullanıcıları çek (dinamik) ──────────────────────────────
+        cur.execute("SELECT user_id, email, university, department FROM users")
+        user_rows = cur.fetchall()
+        if not user_rows:
+            return []
+
+        users_df = pd.DataFrame(user_rows, columns=["user_id", "email", "university", "department"])
+
+        # ── Tüm satılmamış kitapları çek (dinamik) ────────────────────────
+        cur.execute("""
+            SELECT
+                b.id        AS book_id,
+                b.title,
+                b.author,
+                b.category,
+                b.price,
+                b.seller_email,
+                b.image_path,
+                COALESCE(b.is_sold, FALSE) AS is_sold,
+                COALESCE(u.department, b.category, '') AS department,
+                COALESCE(b.description, '') AS description
+            FROM books b
+            LEFT JOIN users u ON b.seller_email = u.email
+            WHERE COALESCE(b.is_sold, FALSE) = FALSE
+        """)
+        book_rows = cur.fetchall()
+        if not book_rows:
+            return []
+
+        books_df = pd.DataFrame(book_rows, columns=[
+            "book_id", "title", "author", "category",
+            "price", "seller_email", "image_path",
+            "is_sold", "department", "description"
+        ])
+
+        # ── Öneri motorunu çalıştır ───────────────────────────────────────
+        recommendations = get_recommendations(
+            user_id=user_id,
+            users_df=users_df,
+            books_df=books_df,
+            top_n=min(top_n, len(books_df))
+        )
+
+        # ── Resim URL'lerini düzelt ───────────────────────────────────────
+        image_map = dict(zip(books_df["book_id"], books_df["image_path"]))
+        for rec in recommendations:
+            raw = image_map.get(rec["book_id"], "") or ""
+            if raw.startswith("http"):
+                rec["image_path"] = raw
+            elif raw.startswith("/uploads/"):
+                rec["image_path"] = f"{BASE_URL}{raw}"
+            elif raw:
+                rec["image_path"] = f"{BASE_URL}/uploads/{raw}"
+            else:
+                rec["image_path"] = None
+
+        return recommendations
+
+    except PermissionError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Öneri sistemi hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

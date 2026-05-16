@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ApiService {
-  // LOKAL IP ADRESİNİZ - DEĞİŞTİRİLMEDİ
-  static const String baseUrl = "http://192.168.1.30:8000";
+  // LOKAL IP ADRESİNİZ - GÜNCELLENDİ
+  static const String baseUrl = "http://10.108.206.156:8000";
 
   // --- Giriş Yap ---
   static Future<Map<String, dynamic>?> login(String email, String password) async {
@@ -244,4 +244,18 @@ class ApiService {
       return {"status": "error", "message": "Bağlantı hatası."};
     }
   }
+
+  // --- Kişiselleştirilmiş Kitap Önerileri ---
+  static Future<List<dynamic>> getRecommendations(int userId, {int topN = 5}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/recommendations/$userId?top_n=$topN'),
+      );
+      return response.statusCode == 200 ? jsonDecode(response.body) : [];
+    } catch (e) {
+      debugPrint("Öneri sistemi hatası: $e");
+      return [];
+    }
+  }
+
 } // Sınıfın sonu
