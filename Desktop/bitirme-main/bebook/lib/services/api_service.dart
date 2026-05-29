@@ -5,7 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.1.6:8001";
+  // Web (Chrome) için localhost, mobil için gerçek IP kullan
+  static final String baseUrl = kIsWeb
+      ? "http://localhost:8002"
+      : "http://192.168.1.103:8002";
 
   // --- Giriş Yap ---
   static Future<Map<String, dynamic>?> login(String email, String password) async {
@@ -28,6 +31,7 @@ class ApiService {
     required String password,
     required String university,
     required String department,
+    String fullName = '',
   }) async {
     try {
       final response = await http.post(
@@ -38,6 +42,7 @@ class ApiService {
           "password": password,
           "university": university,
           "department": department,
+          "full_name": fullName,
         }),
       );
       return response.statusCode == 200;
@@ -111,6 +116,7 @@ class ApiService {
     required double price,
     required String description,
     required String sellerEmail,
+    String publisher = "",
     XFile? imageFile,
   }) async {
     try {
@@ -121,14 +127,21 @@ class ApiService {
       request.fields['price'] = price.toString();
       request.fields['description'] = description;
       request.fields['seller_email'] = sellerEmail;
+      request.fields['publisher'] = publisher;
 
       if (imageFile != null) {
         final bytes = await imageFile.readAsBytes();
         final fileName = imageFile.name.isNotEmpty ? imageFile.name : 'image.jpg';
-        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+        request.files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: fileName),
+        );
       }
 
-      var streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      final responseBody = await streamedResponse.stream.bytesToString();
+      debugPrint("Upload response: ${streamedResponse.statusCode} - $responseBody");
       return streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201;
     } catch (e) {
       debugPrint("Yükleme Hatası: $e");
@@ -259,8 +272,14 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/recommendations/$userId?top_n=$topN'),
-      );
-      return response.statusCode == 200 ? jsonDecode(response.body) : [];
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) return decoded;
+        return [];
+      }
+      debugPrint("Öneri sistemi HTTP hatası: ${response.statusCode}");
+      return [];
     } catch (e) {
       debugPrint("Öneri sistemi hatası: $e");
       return [];
@@ -368,18 +387,61 @@ class ApiService {
   // YENİ: Profil Fotoğrafı Yükleme
   // ─────────────────────────────────────────
 
-  static Future<bool> uploadProfilePhoto(int userId, File imageFile) async {
+  static Future<String?> uploadProfilePhoto(int userId, File imageFile) async {
     try {
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/user/upload_profile_photo/$userId'),
       );
-      request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
-      var response = await request.send();
-      return response.statusCode == 200;
+
+      // Web ve mobil uyumlu: bytes ile yükle
+      final bytes = await imageFile.readAsBytes();
+      final fileName = imageFile.path.split('/').last.split('\\').last;
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName.isNotEmpty ? fileName : 'profile.jpg',
+      ));
+
+      var streamedResponse = await request.send();
+      final responseBody = await streamedResponse.stream.bytesToString();
+      debugPrint("Profil fotoğrafı yanıtı: ${streamedResponse.statusCode} - $responseBody");
+
+      if (streamedResponse.statusCode == 200) {
+        final data = jsonDecode(responseBody);
+        return data['image_path']?.toString();
+      }
+      debugPrint("Profil fotoğrafı hata: ${streamedResponse.statusCode} - $responseBody");
+      return null;
     } catch (e) {
       debugPrint("Profil fotoğrafı yükleme hatası: $e");
-      return false;
+      return null;
+    }
+  }
+
+  // XFile ile profil fotoğrafı yükleme (web uyumlu)
+  static Future<String?> uploadProfilePhotoXFile(int userId, XFile imageFile) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/user/upload_profile_photo/$userId'),
+      );
+      final bytes = await imageFile.readAsBytes();
+      final fileName = imageFile.name.isNotEmpty ? imageFile.name : 'profile.jpg';
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+
+      var streamedResponse = await request.send();
+      final responseBody = await streamedResponse.stream.bytesToString();
+      debugPrint("Profil fotoğrafı yanıtı: ${streamedResponse.statusCode} - $responseBody");
+
+      if (streamedResponse.statusCode == 200) {
+        final data = jsonDecode(responseBody);
+        return data['image_path']?.toString();
+      }
+      return null;
+    } catch (e) {
+      debugPrint("Profil fotoğrafı yükleme hatası: $e");
+      return null;
     }
   }
 }

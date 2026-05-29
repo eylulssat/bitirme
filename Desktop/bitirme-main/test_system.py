@@ -6,11 +6,11 @@ print("=" * 50)
 print()
 
 endpoints = [
-    ("Kitaplar Listesi", "http://192.168.1.3:8000/books"),
-    ("Oneriler (User 18)", "http://192.168.1.3:8000/recommendations/18?top_n=6"),
-    ("Favoriler (User 18)", "http://192.168.1.3:8000/favorites/18"),
-    ("Mesajlar (User 18)", "http://192.168.1.3:8000/chats/18"),
-    ("Kullanici Kitaplari", "http://192.168.1.3:8000/my-books/18"),
+    ("Kitaplar Listesi", "http://192.168.1.103:8002/books"),
+    ("Oneriler (User 18)", "http://192.168.1.103:8002/recommendations/18?top_n=6"),
+    ("Favoriler (User 18)", "http://192.168.1.103:8002/favorites/18"),
+    ("Mesajlar (User 18)", "http://192.168.1.103:8002/chats/18"),
+    ("Kullanici Kitaplari", "http://192.168.1.103:8002/my-books/18"),
 ]
 
 errors = []

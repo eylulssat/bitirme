@@ -36,6 +36,7 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
   String? _selectedUniversity;
   String? _selectedDepartment;
 
@@ -189,11 +190,12 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
     _formController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _fullNameController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    const String apiUrl = "http://192.168.1.6:8001/login";
+    final String apiUrl = "${ApiService.baseUrl}/login";
 
     setState(() => _isLoading = true);
     HapticFeedback.mediumImpact();
@@ -217,6 +219,18 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
         await prefs.setString('university', data['university'] ?? '');
         await prefs.setString('department', data['department'] ?? '');
         await prefs.setBool('is_logged_in', true);
+        // full_name kaydet
+        final fullName = data['full_name']?.toString() ?? '';
+        if (fullName.isNotEmpty) {
+          await prefs.setString('full_name', fullName);
+        }
+        // Profil fotoğrafı varsa kaydet
+        final profilePath = data['profile_image_path']?.toString() ?? '';
+        debugPrint("LOGIN - profile_image_path: $profilePath");
+        if (profilePath.isNotEmpty) {
+          await prefs.setString('profile_image_path', profilePath);
+        }
+        // Boş gelirse mevcut değeri koru (silme)
 
         if (mounted) {
           HapticFeedback.heavyImpact();
@@ -228,6 +242,8 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
             "user_email": data['user_email'] ?? '',
             "university": data['university'] ?? '',
             "department": data['department'] ?? '',
+            "profile_image_path": profilePath,
+            "full_name": data['full_name'] ?? '',
           });
         }
       } else {
@@ -256,6 +272,7 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
       password: _passwordController.text.trim(),
       university: _selectedUniversity ?? "",
       department: _selectedDepartment ?? "",
+      fullName: _fullNameController.text.trim(),
     );
 
     setState(() => _isLoading = false);
@@ -269,6 +286,7 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
       // Kayıt bilgilerini sakla
       final registeredEmail = _emailController.text.trim();
       final registeredPassword = _passwordController.text.trim();
+      final registeredFullName = _fullNameController.text.trim();
 
       setState(() {
         _isLogin = true;
@@ -284,6 +302,15 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
       // Giriş formuna email ve şifreyi otomatik doldur
       _emailController.text = registeredEmail;
       _passwordController.text = registeredPassword;
+      
+      // full_name'i hemen SharedPreferences'a kaydet
+      if (registeredFullName.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('full_name', registeredFullName);
+      }
+      
+      // Otomatik giriş yap
+      await _handleLogin();
     } else {
       _showSnackBar(
         "Kayıt başarısız. Bu e-posta zaten kullanımda olabilir.",
@@ -747,6 +774,13 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
                     // University & Department (Signup only)
                     if (!_isLogin) ...[
                       const SizedBox(height: 24),
+                      _buildUltraTextField(
+                        "Ad Soyad",
+                        Icons.person_rounded,
+                        controller: _fullNameController,
+                        validator: (v) => (v == null || v.isEmpty) ? "Ad soyad gereklidir" : null,
+                      ),
+                      const SizedBox(height: 24),
                       _buildUltraDropdown(
                         "Üniversiten",
                         Icons.school_rounded,
@@ -789,6 +823,7 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
     required TextEditingController controller,
     bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -1136,9 +1171,10 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: Colors.white.withOpacity(0.2),
@@ -1146,16 +1182,16 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
                     child: Icon(
                       _isLogin ? Icons.login_rounded : Icons.person_add_rounded,
                       color: Colors.white,
-                      size: 24,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 10),
                   Text(
                     _isLogin ? "Giriş Yap" : "Üye Ol",
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: 16,
                         ),
                   ),
                 ],
@@ -1166,7 +1202,8 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
 
   Widget _buildToggleMode() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Colors.white.withOpacity(0.08),
@@ -1178,37 +1215,34 @@ class _UltraPremiumAuthScreenState extends State<UltraPremiumAuthScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            _isLogin ? "Hesabın yok mu?" : "Zaten hesabın var mı?",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              _isLogin ? "Hesabın yok mu?" : "Zaten hesabın var mı?",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                colors: [
-                  AppTheme.accentOrange.withOpacity(0.3),
-                  AppTheme.accentPink.withOpacity(0.3),
-                ],
+          const SizedBox(width: 6),
+          TextButton(
+            onPressed: _toggleMode,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              backgroundColor: AppTheme.accentOrange.withOpacity(0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: TextButton(
-              onPressed: _toggleMode,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              ),
-              child: Text(
-                _isLogin ? "Üye Ol" : "Giriş Yap",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+            child: Text(
+              _isLogin ? "Üye Ol" : "Giriş Yap",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart'; // ApiService dosya yolunu kontrol et
-import 'otp_verification_screen.dart'; // Yeni olu┼şturaca─ş─▒n ekran─▒n yolu
+import 'package:flutter/services.dart';
+import '../../services/api_service.dart';
+import '../../core/theme/app_theme.dart';
 import 'otp_verification_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -10,137 +11,368 @@ class ForgotPasswordScreen extends StatefulWidget {
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
-  bool _isLoading = false; // Y├╝klenme durumunu takip etmek i├ğin
+  bool _isLoading = false;
+
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeIn);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(
+        CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSendOtp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    HapticFeedback.mediumImpact();
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await ApiService.sendOtp(_emailController.text.trim());
+
+      if (!mounted) return;
+
+      if (result['status'] == 'success') {
+        HapticFeedback.heavyImpact();
+        
+        // Geliştirme modu: Eğer OTP response'da varsa göster
+        String message = "Doğrulama kodu e-postanıza gönderildi!";
+        if (result['dev_mode'] == true && result['otp'] != null) {
+          message = "Doğrulama Kodu: ${result['otp']}\n(Geliştirme Modu)";
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 5),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                OtpVerificationScreen(email: _emailController.text.trim()),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? "Bu e-posta kayıtlı değil."),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Bağlantı hatası oluştu."),
+          backgroundColor: AppTheme.errorRed,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF6C63FF);
-
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text("┼Şifremi Unuttum",
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  const Icon(Icons.mark_email_read_outlined,
-                      size: 80, color: primaryColor),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "┼Şifrenizi mi Unuttunuz?",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "Kay─▒tl─▒ e-posta adresinizi girin, size bir do─şrulama kodu g├Ânderelim.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 30),
-
-                  // E-POSTA ALANI
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) => (value == null || value.isEmpty)
-                        ? "L├╝tfen e-postan─▒z─▒ girin"
-                        : null,
-                    decoration: InputDecoration(
-                      labelText: "E-posta Adresi",
-                      prefixIcon: const Icon(Icons.mail_outline),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // G├ûNDER BUTONU
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleSendOtp, // Y├╝kleniyorsa butonu pasif yap
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text("Kod G├Ânder",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
+      backgroundColor: AppTheme.neutralLight,
+      body: Stack(
+        children: [
+          // Arka plan gradient
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFF3F0FF),
+                    Color(0xFFFFF5F0),
+                    Color(0xFFF5F5F7),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // Geri butonu
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: AppTheme.shadowSM,
+                        ),
+                        child: const Icon(Icons.arrow_back_ios_rounded,
+                            color: AppTheme.primaryIndigo, size: 20),
+                      ),
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: FadeTransition(
+                      opacity: _fadeAnim,
+                      child: SlideTransition(
+                        position: _slideAnim,
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 20),
+
+                            // İkon
+                            Container(
+                              padding: const EdgeInsets.all(28),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.primaryGradient,
+                                shape: BoxShape.circle,
+                                boxShadow: AppTheme.shadowPrimary,
+                              ),
+                              child: const Icon(
+                                Icons.mark_email_read_outlined,
+                                size: 56,
+                                color: Colors.white,
+                              ),
+                            ),
+
+                            const SizedBox(height: 32),
+
+                            Text(
+                              "Şifreni mi Unuttun?",
+                              style:
+                                  AppTheme.textTheme.headlineLarge?.copyWith(
+                                color: AppTheme.primaryIndigo,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Text(
+                              "Kayıtlı e-posta adresini gir,\nsana 6 haneli bir doğrulama kodu gönderelim.",
+                              textAlign: TextAlign.center,
+                              style: AppTheme.textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.neutralDark,
+                                height: 1.6,
+                              ),
+                            ),
+
+                            const SizedBox(height: 40),
+
+                            // Form kartı
+                            Container(
+                              padding: const EdgeInsets.all(28),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: AppTheme.shadowLG,
+                              ),
+                              child: Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "E-posta Adresi",
+                                      style: AppTheme.textTheme.titleSmall
+                                          ?.copyWith(
+                                        color: AppTheme.neutralBlack,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: _emailController,
+                                      keyboardType:
+                                          TextInputType.emailAddress,
+                                      validator: (v) =>
+                                          (v == null || v.isEmpty)
+                                              ? "Lütfen e-posta adresinizi girin"
+                                              : null,
+                                      decoration: InputDecoration(
+                                        hintText: "ornek@email.com",
+                                        prefixIcon: Icon(
+                                          Icons.alternate_email_rounded,
+                                          color: AppTheme.primaryIndigo,
+                                        ),
+                                        filled: true,
+                                        fillColor: AppTheme.neutralLight,
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          borderSide: const BorderSide(
+                                              color: AppTheme.primaryIndigo,
+                                              width: 2),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 28),
+
+                                    // Gönder butonu
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 56,
+                                      child: ElevatedButton(
+                                        onPressed: _isLoading
+                                            ? null
+                                            : _handleSendOtp,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.transparent,
+                                          shadowColor: Colors.transparent,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                        child: Ink(
+                                          decoration: BoxDecoration(
+                                            gradient:
+                                                AppTheme.primaryGradient,
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                          child: Container(
+                                            alignment: Alignment.center,
+                                            child: _isLoading
+                                                ? const SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      strokeWidth: 2.5,
+                                                    ),
+                                                  )
+                                                : const Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                          Icons
+                                                              .send_rounded,
+                                                          color:
+                                                              Colors.white,
+                                                          size: 20),
+                                                      SizedBox(width: 10),
+                                                      Text(
+                                                        "Kod Gönder",
+                                                        style: TextStyle(
+                                                          color:
+                                                              Colors.white,
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Giriş yap linki
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  "Şifreni hatırladın mı? ",
+                                  style: AppTheme.textTheme.bodyMedium,
+                                ),
+                                GestureDetector(
+                                  onTap: () => Navigator.pop(context),
+                                  child: Text(
+                                    "Giriş Yap",
+                                    style: TextStyle(
+                                      color: AppTheme.primaryIndigo,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  // OTP G├Ânderme ─░┼şlemi
-  Future<void> _handleSendOtp() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-
-      try {
-        final result = await ApiService.sendOtp(_emailController.text);
-
-        if (!mounted) return;
-
-        if (result['status'] == 'success') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Do─şrulama kodu e-posta adresinize g├Ânderildi!"),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // Kod do─şrulama ekran─▒na y├Ânlendiriyoruz
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OtpVerificationScreen(email: _emailController.text),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? "Kod g├Ânderilemedi."),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Ba─şlant─▒ hatas─▒ olu┼ştu."),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
   }
 }

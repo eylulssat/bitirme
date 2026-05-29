@@ -90,7 +90,10 @@ def get_recommendations(
     user_row = user_row.iloc[0]
 
     # ── Satılmamış kitapları filtrele ─────────────────────────────────────
-    available_books = books_df[books_df.get("is_sold", False) == False].copy()
+    if "is_sold" in books_df.columns:
+        available_books = books_df[books_df["is_sold"] != True].copy()
+    else:
+        available_books = books_df.copy()
     if available_books.empty:
         return []
 
@@ -109,16 +112,31 @@ def get_recommendations(
     book_vecs = vectorizer.transform(available_books["feature_text"])
 
     # ── Cosine Similarity ─────────────────────────────────────────────────
+    import numpy as np
     scores = cosine_similarity(user_vec, book_vecs)[0]
+    # NaN / Inf değerlerini temizle
+    scores = np.nan_to_num(scores, nan=0.0, posinf=0.0, neginf=0.0)
     available_books = available_books.copy()
     available_books["similarity_score"] = scores
 
-    # ── Top-N seç ─────────────────────────────────────────────────────────
-    top_books = available_books.nlargest(top_n, "similarity_score")
+    # ── Top-N seç — minimum eşik: 0.05 (5%) ──────────────────────────────
+    # Önce bölüme uygun kitapları filtrele (skor > 0.05)
+    MIN_SCORE = 0.05
+    relevant_books = available_books[available_books["similarity_score"] >= MIN_SCORE]
+    
+    if relevant_books.empty:
+        # Hiç uygun kitap yoksa boş liste döndür
+        return []
+    
+    top_books = relevant_books.nlargest(top_n, "similarity_score")
 
     # ── Sonuçları formatla ────────────────────────────────────────────────
     results = []
     for _, book in top_books.iterrows():
+        score = float(book["similarity_score"])
+        # Güvenli float dönüşümü
+        if not np.isfinite(score):
+            score = 0.0
         results.append({
             "book_id":          int(book["book_id"]),
             "title":            book.get("title", ""),
@@ -127,9 +145,9 @@ def get_recommendations(
             "category":         book.get("category", ""),
             "price":            float(book.get("price", 0)),
             "seller_email":     book.get("seller_email", ""),
-            "image_path":       book.get("image_path", None),
-            "similarity_score": round(float(book["similarity_score"]), 4),
-            "match_percentage": round(float(book["similarity_score"]) * 100, 1),
+            "image_path":       book.get("image_path", None) if isinstance(book.get("image_path"), str) else None,
+            "similarity_score": round(score, 4),
+            "match_percentage": round(score * 100, 1),
         })
 
     return results

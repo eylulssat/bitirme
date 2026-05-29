@@ -30,22 +30,17 @@ def scan_isbn():
 
     # 1. Önce gri tonlamaya çeviriyoruz
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # 2. GÖRÜNTÜYÜ KÜÇÜLTÜYORUZ (Telefon kameraları için en kritik adım!)
-    # Genişliği 800 piksele sabitleyip yüksekliği orantılı küçültüyoruz
+    # 2. GÖRÜNTÜYÜ KÜÇÜLTÜYORUZ 
     height, width = gray.shape
     if width > 800:
         oran = 800.0 / width
         yeni_boyut = (800, int(height * oran))
         gray = cv2.resize(gray, yeni_boyut, interpolation=cv2.INTER_AREA)
 
-    # 3. ZITLIĞI ARTIRMA (Siyahları tam siyah, beyazları tam beyaz yapıyoruz)
     _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
 
-    # 4. Önce keskinleştirilmiş resimde barkod arıyoruz
     decoded_objects = decode(thresh)
 
-    # 5. Eğer keskinleştirilmişte bulamazsa, B planı olarak sadece küçültülmüş resme bakıyoruz
     if not decoded_objects:
         decoded_objects = decode(gray)
 
@@ -258,6 +253,6 @@ def scan_isbn():
     })
 
 if __name__ == "__main__":
-    print("🚀 ISBN Backend başlatılıyor: http://192.168.1.6:8001")
+    print("🚀 ISBN Backend başlatılıyor: http://192.168.1.103:8001")
     app.run(host="0.0.0.0", port=8001, debug=False, threaded=True)
 

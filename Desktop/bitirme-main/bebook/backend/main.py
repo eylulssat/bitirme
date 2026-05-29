@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# BeBook Backend API v2
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,7 +33,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-BASE_URL = "http://192.168.1.6:8001" 
+BASE_URL = "http://192.168.1.103:8002"
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,7 +49,7 @@ def get_db_connection():
         host="localhost",
         database="bebook",
         user="postgres",
-        password="1414",
+        password="12345",
         port="5432"
     )
 
@@ -210,11 +211,17 @@ async def login(user: UserLogin):
                 response_data["department"] = result[idx] if len(result) > idx else None
                 idx += 1
             if 'profile_image_path' in columns:
-                response_data["profile_image_path"] = result[idx] if len(result) > idx else None
+                raw_path = result[idx] if len(result) > idx else None
+                # Ters slash'ı düzelt
+                if raw_path:
+                    raw_path = raw_path.replace('\\', '/')
+                response_data["profile_image_path"] = raw_path
+                print(f"LOGIN - profile_image_path: {raw_path}")
                 idx += 1
             if 'full_name' in columns:
                 response_data["full_name"] = result[idx] if len(result) > idx else None
                 
+            print(f"LOGIN response: {response_data}")
             return response_data
         else:
             raise HTTPException(status_code=401, detail="E-posta veya sifre hatali.")
@@ -234,9 +241,10 @@ async def get_all_books():
             SELECT 
                 b.id as book_id, u.user_id, b.title, b.author, b.category, b.price, 
                 b.description, b.image_path, b.seller_email, b.publisher,
-                u.email, u.university, u.department
+                u.email, u.university, u.department, b.is_sold
             FROM public.books b
-            LEFT JOIN public.users u ON b.seller_email = u.email
+            LEFT JOIN public.users u ON LOWER(TRIM(b.seller_email)) = LOWER(TRIM(u.email))
+            WHERE b.is_sold = FALSE OR b.is_sold IS NULL
         """
         cur.execute(query)
         books = cur.fetchall()
@@ -267,7 +275,8 @@ async def get_all_books():
                 "publisher": b[9],
                 "email": b[10],
                 "university": b[11],
-                "department": b[12]
+                "department": b[12],
+                "is_sold": b[13] if len(b) > 13 else False
             })
         return result
     finally:
@@ -280,7 +289,7 @@ async def add_book(
     author: str = Form(...),
     category: str = Form(...),
     price: float = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     seller_email: str = Form(...),
     publisher: str = Form(""),
     file: UploadFile = File(None)
@@ -326,9 +335,9 @@ async def get_my_books(user_id: int):
         user_email = user_result[0]
         
         cur.execute("""
-            SELECT id as book_id, title, author, category, publisher, price, description, image_path
+            SELECT id, title, author, category, publisher, price, description, image_path
             FROM books
-            WHERE seller_email = %s
+            WHERE seller_email = %s AND (is_sold = FALSE OR is_sold IS NULL)
         """, (user_email,))
         books = cur.fetchall()
 
@@ -417,94 +426,57 @@ async def get_chat_list(my_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # EN BASİT VE KESİN ÇALIŞAN SORGU
-        # Önce tüm mesajları alalım
-        query = """
-        SELECT 
-            m.book_id,
-            m.sender_id,
-            m.receiver_id,
-            m.message_text,
+        # Önce users tablosundaki sütunları kontrol edelim
+        cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
+        columns = [row[0] for row in cursor.fetchall()]
+        print(f"Users tablosundaki sütunlar: {columns}")
+        
+        # full_name sütunu varsa onu kullan, yoksa email kullan
+        full_name_column = "u.full_name" if 'full_name' in columns else "u.email"
+        profile_image_column = "u.profile_image_path" if 'profile_image_path' in columns else "NULL"
+        
+        query = f"""
+        SELECT DISTINCT ON (m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id))
+            m.sender_id, 
+            m.receiver_id, 
+            m.message_text, 
+            m.book_id, 
             m.created_at,
-            b.title
+            u.email, 
+            b.title,
+            {profile_image_column} as profile_image_path,
+            {full_name_column} as other_user_name,
+            (SELECT COUNT(*) FROM usermessages 
+             WHERE receiver_id = %s 
+             AND sender_id = (CASE WHEN m.sender_id = %s THEN m.receiver_id ELSE m.sender_id END) 
+             AND book_id = m.book_id 
+             AND is_read = FALSE) as unread_count
         FROM usermessages m
+        LEFT JOIN users u ON u.user_id = (CASE WHEN m.sender_id = %s THEN m.receiver_id ELSE m.sender_id END)
         LEFT JOIN books b ON m.book_id = b.id
         WHERE m.sender_id = %s OR m.receiver_id = %s
-        ORDER BY m.created_at DESC
+        ORDER BY m.book_id, LEAST(m.sender_id, m.receiver_id), GREATEST(m.sender_id, m.receiver_id), m.created_at DESC
         """
         
-        cursor.execute(query, (my_id, my_id))
-        all_messages = cursor.fetchall()
+        cursor.execute(query, (my_id, my_id, my_id, my_id, my_id))
+        rows = cursor.fetchall()
         
-        # Şimdi gruplayalım: her (book_id, diğer_kullanıcı) çifti için en son mesajı al
-        chat_dict = {}
-        for msg in all_messages:
-            book_id = msg[0]
-            sender_id = msg[1]
-            receiver_id = msg[2]
-            
-            # Diğer kullanıcıyı bul
-            other_user_id = receiver_id if sender_id == my_id else sender_id
-            
-            key = f"{book_id}_{other_user_id}"
-            
-            # Eğer bu sohbet daha önce eklenmediyse veya daha yeni bir mesajsa
-            if key not in chat_dict or msg[4] > chat_dict[key]['created_at']:
-                # Diğer kullanıcının bilgilerini al
-                # Önce users tablosundaki sütunları kontrol et
-                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
-                columns = [row[0] for row in cursor.fetchall()]
-                
-                # Hangi sütunları seçeceğimizi belirle
-                select_columns = ["email"]  # email her zaman var
-                if 'profile_image_path' in columns:
-                    select_columns.append("profile_image_path")
-                if 'full_name' in columns:
-                    select_columns.append("full_name")
-                
-                user_query = f"SELECT {', '.join(select_columns)} FROM users WHERE user_id = %s"
-                cursor.execute(user_query, (other_user_id,))
-                user_info = cursor.fetchone()
-                
-                # Bilgileri parse et
-                email = user_info[0] if user_info else None
-                profile_image = None
-                full_name = None
-                
-                idx = 1
-                if 'profile_image_path' in columns and len(user_info) > idx:
-                    profile_image = user_info[idx]
-                    idx += 1
-                if 'full_name' in columns and len(user_info) > idx:
-                    full_name = user_info[idx]
-                
-                # Okunmamış mesaj sayısını al
-                unread_query = """
-                SELECT COUNT(*) FROM usermessages 
-                WHERE receiver_id = %s 
-                AND sender_id = %s 
-                AND book_id = %s 
-                AND is_read = FALSE
-                """
-                cursor.execute(unread_query, (my_id, other_user_id, book_id))
-                unread_count = cursor.fetchone()[0]
-                
-                chat_dict[key] = {
-                    "book_id": book_id,
-                    "receiver_id": other_user_id,
-                    "receiver_name": full_name if full_name else email,
-                    "full_name": full_name,
-                    "book_title": msg[5] if msg[5] else f"Kitap #{book_id}",
-                    "last_message": msg[3],
-                    "profile_image": profile_image,
-                    "created_at": msg[4],
-                    "unread_count": unread_count
-                }
+        from datetime import datetime
+        rows = sorted(rows, key=lambda x: x[4] if x[4] else datetime.min, reverse=True)
         
-        # Dictionary'den listeye çevir ve tarihe göre sırala
-        chats = list(chat_dict.values())
-        chats.sort(key=lambda x: x['created_at'], reverse=True)
-        
+        chats = []
+        for row in rows:
+            other_id = row[1] if row[0] == my_id else row[0]
+            chats.append({
+                "receiver_id": other_id,
+                "receiver_name": row[8] if row[8] else row[5],  # other_user_name veya email
+                "full_name": row[8] if row[8] else row[5],
+                "book_title": row[6] if row[6] else f"Kitap #{row[3]}",
+                "book_id": row[3],
+                "last_message": row[2],
+                "profile_image": row[7],
+                "unread_count": row[9]
+            })
         return chats
 
     except Exception as e:
@@ -520,7 +492,7 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
     cursor = conn.cursor()
     try:
         query = """
-            SELECT sender_id, receiver_id, message_text, created_at, is_read, is_delivered 
+            SELECT id, sender_id, receiver_id, message_text, created_at, is_read, is_delivered 
             FROM usermessages 
             WHERE ((sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s))
             AND book_id = %s
@@ -532,12 +504,14 @@ async def get_messages_with_book(sender_id: int, receiver_id: int, book_id: int)
         result = []
         for m in messages:
             result.append({
-                "sender_id": m[0],
-                "receiver_id": m[1],
-                "message_text": m[2],
-                "created_at": m[3].isoformat() if m[3] else None,
-                "is_read": m[4],
-                "is_delivered": m[5]
+                "id": m[0],
+                "sender_id": m[1],
+                "receiver_id": m[2],
+                "message_text": m[3],
+                "created_at": m[4].isoformat() if m[4] else None,
+                "is_read": m[5],
+                "is_delivered": m[6],
+                "book_id": book_id
             })
         return result
     except Exception as e:
@@ -558,12 +532,18 @@ async def send_message_fixed(data: dict):
         message_text = data.get("message_text")
 
         query = """
-            INSERT INTO usermessages (sender_id, receiver_id, book_id, message_text, is_read) 
-            VALUES (%s, %s, %s, %s, FALSE)
+            INSERT INTO usermessages (sender_id, receiver_id, book_id, message_text, is_read, is_delivered) 
+            VALUES (%s, %s, %s, %s, FALSE, FALSE)
+            RETURNING id, created_at
         """
         cursor.execute(query, (sender_id, receiver_id, book_id, message_text))
+        row = cursor.fetchone()
         conn.commit()
-        return {"status": "success"}
+        return {
+            "status": "success",
+            "id": row[0],
+            "created_at": row[1].isoformat() if row[1] else None
+        }
     except Exception as e:
         print(f"Mesaj Kayit Hatasi: {e}")
         return {"status": "error", "message": str(e)}
@@ -677,7 +657,7 @@ async def get_favorites(user_id: int):
         cur = conn.cursor()
         query = """
             SELECT 
-                b.id, b.title, b.author, b.category, b.price, b.description, 
+                b.id as book_id, b.title, b.author, b.category, b.price, b.description, 
                 b.seller_email, b.image_path, b.publisher,
                 u.user_id, u.email, u.university, u.department,
                 f.created_at as favorited_at
@@ -731,7 +711,16 @@ async def check_favorite(user_id: int, book_id: int):
 # --- ILETISIM FORMU ---
 @app.post("/contact")
 async def contact(req: ContactRequest):
-    return {"status": "success", "message": "Mesajiniz iletildi."}
+    try:
+        # bebook.support@gmail.com adresine mail gönder
+        success = send_contact_email(req.full_name, req.email, req.message)
+        if success:
+            return {"status": "success", "message": "Mesajiniz iletildi."}
+        else:
+            return {"status": "error", "message": "Mail gonderilemedi, lutfen tekrar deneyin."}
+    except Exception as e:
+        print(f"Iletisim formu hatasi: {e}")
+        return {"status": "error", "message": str(e)}
 
 # --- ONERI SISTEMI ---
 @app.get("/recommendations/{user_id}")
@@ -756,6 +745,7 @@ async def get_recommendations_endpoint(user_id: int, top_n: int = 6):
             SELECT id as book_id, title, author, category, price, description, 
                    seller_email, image_path, publisher
             FROM books
+            WHERE is_sold = FALSE OR is_sold IS NULL
         """)
         books_data = cur.fetchall()
         books_df = pd.DataFrame(books_data, columns=[
@@ -776,7 +766,7 @@ async def get_recommendations_endpoint(user_id: int, top_n: int = 6):
             
             # Resim yolunu tam URL'e cevir
             image_path = book["image_path"]
-            if image_path:
+            if image_path and isinstance(image_path, str) and image_path.strip():
                 if image_path.startswith('http'):
                     image_url = image_path
                 elif image_path.startswith('/uploads/'):
@@ -804,14 +794,26 @@ async def get_recommendations_endpoint(user_id: int, top_n: int = 6):
         
         # Onerileri al
         recommendations = get_recommendations(user_id, users_df, books_df, top_n=top_n)
+        print(f"Oneri sayisi: {len(recommendations)}")
         
-        return recommendations
+        # NaN/Inf değerlerini temizle (JSON uyumluluğu için)
+        import math
+        clean = []
+        for item in recommendations:
+            clean_item = {}
+            for k, v in item.items():
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    clean_item[k] = 0.0
+                else:
+                    clean_item[k] = v
+            clean.append(clean_item)
+        return clean
         
     except Exception as e:
         print(f"Oneri sistemi hatasi: {e}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e), "recommendations": []}
+        return []
     finally:
         conn.close()
 
@@ -865,7 +867,9 @@ async def create_payment(payment: CreatePayment):
             ]
         }
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, IYZICO_OPTIONS)
-        return json.loads(checkout_form_initialize.read().decode('utf-8'))
+        iyzico_response = json.loads(checkout_form_initialize.read().decode('utf-8'))
+        iyzico_response['orderId'] = order_id  # Flutter için order_id ekle
+        return iyzico_response
     except Exception as e:
         print(f"Odeme hatasi: {e}")
         return {"status": "error", "message": str(e)}
@@ -880,15 +884,21 @@ async def bulk_payment(request: BulkPaymentRequest):
     try:
         cur = conn.cursor()
         
-        # Ilk kitabin ID'sini orders tablosuna kaydediyoruz
-        first_book_id = request.book_ids[0] if request.book_ids else None
+        # Her kitap için ayrı order satırı ekle, ilk kitabın order_id'sini conversationId olarak kullan
+        first_order_id = None
+        per_book_price = request.total_price / len(request.book_ids) if request.book_ids else request.total_price
 
-        cur.execute(
-            "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
-            (request.user_id, first_book_id, request.total_price, "PENDING")
-        )
-        order_id = cur.fetchone()[0]
+        for b_id in request.book_ids:
+            cur.execute(
+                "INSERT INTO orders (user_id, book_id, price, status) VALUES (%s, %s, %s, %s) RETURNING order_id",
+                (request.user_id, b_id, per_book_price, "PENDING")
+            )
+            oid = cur.fetchone()[0]
+            if first_order_id is None:
+                first_order_id = oid
+
         conn.commit()
+        order_id = first_order_id
 
         # Sepetteki tum kitaplari basket_items'a ekliyoruz
         basket_items = []
@@ -898,7 +908,7 @@ async def bulk_payment(request: BulkPaymentRequest):
                 'name': f'Kitap ID: {b_id}',
                 'category1': 'Egitim',
                 'itemType': 'PHYSICAL',
-                'price': str(request.total_price / len(request.book_ids))
+                'price': str(per_book_price)
             }
             basket_items.append(item)
 
@@ -941,7 +951,9 @@ async def bulk_payment(request: BulkPaymentRequest):
         }
 
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(iyzico_request, IYZICO_OPTIONS)
-        return json.loads(checkout_form_initialize.read().decode('utf-8'))
+        iyzico_response = json.loads(checkout_form_initialize.read().decode('utf-8'))
+        iyzico_response['orderId'] = order_id  # Flutter için order_id ekle
+        return iyzico_response
 
     except Exception as e:
         print(f"Iyzipay Hatasi: {e}")
@@ -975,20 +987,33 @@ async def payment_callback(request: Request):
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute("UPDATE orders SET status = 'SUCCESS' WHERE order_id = %s", (order_id,))
+            
+            # Satın alınan kitabı is_sold = true yap
+            cur.execute("SELECT book_id FROM orders WHERE order_id = %s", (order_id,))
+            order_row = cur.fetchone()
+            if order_row and order_row[0]:
+                cur.execute("UPDATE books SET is_sold = TRUE WHERE id = %s", (order_row[0],))
+            
             conn.commit()
             cur.close()
             conn.close()
         except Exception as e:
             print(f"DB Guncelleme Hatasi: {e}")
 
-        status_text = "Odeme Basarili!"
-        main_color = "#2ecc71"
-        description = "Isleminiz basariyla tamamlandi. Diger ilanlari incelemek icin ana sayfaya donebilirsiniz!"
+        status_text = "Ödeme Başarılı!"
+        main_color = "#10B981"
+        bg_gradient = "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        icon = "✓"
+        sub_text = "Siparişiniz başarıyla tamamlandı. Kitaplarınız en kısa sürede size ulaşacak."
+        btn_text = "Ana Sayfaya Dön"
     else:
-        status_text = "Odeme Basarisiz"
-        main_color = "#e74c3c"
-        error_msg = result.get('errorMessage', 'Odeme onaylanmadi.')
-        description = f"Sorun olustu: {error_msg}"
+        status_text = "Ödeme Başarısız"
+        main_color = "#EF4444"
+        bg_gradient = "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+        icon = "✗"
+        error_msg = result.get('errorMessage', 'Ödeme onaylanmadı.')
+        sub_text = f"İşlem tamamlanamadı: {error_msg}"
+        btn_text = "Tekrar Dene"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -996,31 +1021,172 @@ async def payment_callback(request: Request):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Odeme Sonucu</title>
-    </head>
-    <body style="display:flex; align-items:center; justify-content:center; height:100vh; margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f4f7f6;">
-        <div style="text-align:center; padding:30px; background:white; border-radius:28px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 85%; max-width: 400px;">
-            <div style="font-size: 60px; margin-bottom: 20px;">{"✓" if payment_status == 'SUCCESS' else "✗"}</div>
-            <h1 style="color:{main_color}; font-size: 24px; margin-bottom: 10px;">{status_text}</h1>
-            <p style="color:#666; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">{description}</p>
-            
-            <a href="bebook://home" style="
+        <title>Ödeme Sonucu - BeBook</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: {bg_gradient};
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }}
+            .card {{
+                background: rgba(255,255,255,0.97);
+                border-radius: 32px;
+                padding: 48px 36px;
+                max-width: 380px;
+                width: 100%;
+                text-align: center;
+                box-shadow: 0 25px 60px rgba(0,0,0,0.2);
+            }}
+            .icon-circle {{
+                width: 96px;
+                height: 96px;
+                border-radius: 50%;
+                background: {main_color};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 28px;
+                font-size: 44px;
+                color: white;
+                box-shadow: 0 12px 30px {main_color}55;
+            }}
+            .brand {{
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 3px;
+                color: #9CA3AF;
+                text-transform: uppercase;
+                margin-bottom: 8px;
+            }}
+            h1 {{
+                font-size: 26px;
+                font-weight: 800;
+                color: #1F2937;
+                margin-bottom: 14px;
+            }}
+            p {{
+                font-size: 15px;
+                color: #6B7280;
+                line-height: 1.6;
+                margin-bottom: 36px;
+            }}
+            .divider {{
+                height: 1px;
+                background: #F3F4F6;
+                margin: 0 -36px 28px;
+            }}
+            .btn {{
                 display: block;
                 text-decoration: none;
-                background: white;
-                color: black;
-                padding: 16px;
-                border: 2px solid black;
+                background: {main_color};
+                color: white;
+                padding: 16px 24px;
                 border-radius: 16px;
-                font-weight: 800;
+                font-weight: 700;
                 font-size: 16px;
-                transition: all 0.3s ease;
-            ">ANA SAYFAYA DON</a>
+                box-shadow: 0 8px 20px {main_color}44;
+            }}
+            .footer {{
+                margin-top: 20px;
+                font-size: 12px;
+                color: #D1D5DB;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="icon-circle">{icon}</div>
+            <div class="brand">BeBook</div>
+            <h1>{status_text}</h1>
+            <p>{sub_text}</p>
+            <div class="divider"></div>
+            <a href="bebook://home" class="btn">{btn_text}</a>
+            <div class="footer">BeBook &copy; 2025</div>
         </div>
     </body>
     </html>
     """
     return HTMLResponse(content=html_content)
+
+# SIPARIS TAMAMLANDI (Flutter tarafından manuel tetikleme)
+@app.post("/mark-order-complete/{order_id}")
+async def mark_order_complete(order_id: int):
+    """
+    Flutter ödeme sayfasından döndüğünde:
+    1. Siparişleri SUCCESS yapar
+    2. Satılan kitapları veritabanından siler (ana sayfadan kalkar)
+    3. Satıcıya sistem mesajı gönderir: "Kitabınız satıldı"
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Bu order'ın user_id'sini bul (alıcı)
+        cur.execute("SELECT user_id FROM orders WHERE order_id = %s", (order_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"status": "error", "message": "Order bulunamadı"}
+        buyer_id = row[0]
+        
+        # Bu kullanıcının tüm PENDING siparişlerini SUCCESS yap, book_id'leri al
+        cur.execute("""
+            UPDATE orders SET status = 'SUCCESS' 
+            WHERE user_id = %s AND status = 'PENDING'
+            RETURNING book_id
+        """, (buyer_id,))
+        book_ids = [r[0] for r in cur.fetchall() if r[0]]
+        
+        for bid in book_ids:
+            # Kitabın bilgilerini al (satıcı emaili ve başlığı)
+            cur.execute("SELECT seller_email, title, author, image_path, category FROM books WHERE id = %s", (bid,))
+            book_row = cur.fetchone()
+            if not book_row:
+                continue
+            seller_email, book_title, book_author, book_image, book_category = book_row
+
+            # Satıcının user_id'sini bul
+            cur.execute("SELECT user_id FROM users WHERE email = %s", (seller_email,))
+            seller_row = cur.fetchone()
+            seller_id = seller_row[0] if seller_row else None
+
+            # Kitap bilgilerini orders tablosuna kaydet (kitap silinse bile geçmiş kalır)
+            cur.execute("""
+                UPDATE orders 
+                SET book_title = %s, book_author = %s, book_image = %s, 
+                    book_category = %s, seller_email = %s, seller_id = %s
+                WHERE book_id = %s AND user_id = %s AND status = 'SUCCESS'
+            """, (book_title, book_author, book_image, book_category, seller_email, seller_id, bid, buyer_id))
+
+            # Kitabı veritabanından sil (ana sayfadan kalkar, başkası alamaz)
+            cur.execute("DELETE FROM books WHERE id = %s", (bid,))
+
+            # Satıcıya sistem mesajı gönder
+            if seller_id:
+                system_message = (
+                    f'🎉 Tebrikler! "{book_title}" adlı kitabınız satıldı. '
+                    f'Ödeme iyzico güvencesiyle alındı. '
+                    f'Lütfen kitabı alıcıya en kısa sürede gönderin.'
+                )
+                cur.execute("""
+                    INSERT INTO usermessages 
+                        (sender_id, receiver_id, book_id, message_text, is_read, is_delivered)
+                    VALUES (%s, %s, %s, %s, FALSE, TRUE)
+                """, (buyer_id, seller_id, bid, system_message))
+
+        conn.commit()
+        print(f"Order complete: buyer={buyer_id}, books={book_ids}")
+        return {"status": "success", "books_marked": len(book_ids)}
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Mark order complete hatası: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
 
 # SIPARIS DURUMU SORGULAMA
 @app.get("/order-status/{order_id}")
@@ -1036,6 +1202,63 @@ async def get_order_status(order_id: int):
     finally:
         conn.close()
 
+# SATILAN KİTAPLAR
+@app.get("/sold-books/{user_id}")
+async def get_sold_books(user_id: int):
+    """Kullanıcının satın aldığı kitapları döndürür (kitap silinse bile orders'dan gelir)"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT ON (o.book_id)
+                o.book_id,
+                COALESCE(o.book_title, b.title, 'Kitap') as title,
+                COALESCE(o.book_author, b.author, '') as author,
+                o.price as paid_price,
+                COALESCE(o.book_image, b.image_path) as image_path,
+                COALESCE(o.book_category, b.category, '') as category,
+                COALESCE(o.seller_email, b.seller_email, '') as seller_email,
+                o.created_at as order_date
+            FROM orders o
+            LEFT JOIN books b ON b.id = o.book_id
+            WHERE o.user_id = %s AND o.status = 'SUCCESS'
+            ORDER BY o.book_id, o.created_at DESC
+        """, (user_id,))
+        rows = cur.fetchall()
+        rows = sorted(rows, key=lambda x: x[7] if x[7] else '', reverse=True)
+
+        result = []
+        for r in rows:
+            image_path = r[4]
+            if image_path:
+                if image_path.startswith('http'):
+                    image_url = image_path
+                elif image_path.startswith('/uploads/'):
+                    image_url = f"{BASE_URL}{image_path}"
+                else:
+                    image_url = f"{BASE_URL}/uploads/{image_path}"
+            else:
+                image_url = None
+
+            result.append({
+                "book_id": r[0],
+                "title": r[1],
+                "author": r[2],
+                "paid_price": float(r[3]) if r[3] else 0,
+                "price": float(r[3]) if r[3] else 0,
+                "image_path": image_url,
+                "category": r[5],
+                "seller_email": r[6],
+                "order_date": r[7].isoformat() if r[7] else None,
+                "is_sold": True
+            })
+        return result
+    except Exception as e:
+        print(f"Satın alınan kitaplar hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
 # --- SIFRE SIFIRLAMA SISTEMI ---
 
 # Rastgele 6 haneli kod uretme
@@ -1045,23 +1268,110 @@ def generate_otp():
 # E-posta gonderme fonksiyonu
 def send_otp_email(receiver_email, otp_code):
     sender_email = "merveyilmazz0703@gmail.com" 
-    password = "bhib ibgw lyjd rtsf" 
+    password = "ockl wtne nrst imfs".replace(" ", "")
     
-    subject = "BEBOOK Dogrulama Kodu"
-    body = f"Merhaba,\n\nSifrenizi sifirlamak icin kullanmaniz gereken kod: {otp_code}"
-    email_text = f"Subject: {subject}\n\n{body}"
-    
+    subject = "BeBook - Dogrulama Kodunuz"
+    body = f"""Merhaba,
+
+BeBook hesabinizin sifresini sifirlamak icin asagidaki kodu kullanin:
+
+Dogrulama Kodunuz: {otp_code}
+
+Bu kod 2 dakika gecerlidir.
+Eger bu istegi siz yapmadiyasaniz bu maili dikkate almayiniz.
+
+BeBook Destek Ekibi
+bebook.support@gmail.com"""
+
     try:
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        print(f"Mail gonderiliyor: {sender_email} -> {receiver_email}")
+        
         server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.set_debuglevel(1)  # Debug modu
         server.starttls()
-        server.login(sender_email, password.replace(" ", ""))
-        server.sendmail(sender_email, receiver_email, email_text.encode('utf-8'))
+        print("STARTTLS basarili")
+        
+        server.login(sender_email, password)
+        print("Login basarili")
+        
+        server.sendmail(sender_email, receiver_email, msg.as_string())
+        print("Mail gonderildi")
+        
         server.quit()
         print(f"!!! DOGRULAMA KODU GONDERILDI: {otp_code} !!!")
         return True
-    except Exception as e:
-        print(f"MAIL HATASI: {e}")
+        
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"SMTP AUTHENTICATION HATASI: {e}")
+        print("Gmail App Password'unuzu kontrol edin!")
+        print("2-Factor Authentication aktif olmali ve App Password olusturulmali")
         return False
+    except smtplib.SMTPException as e:
+        print(f"SMTP HATASI: {e}")
+        return False
+    except Exception as e:
+        print(f"GENEL MAIL HATASI: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# ILETISIM FORMU MAIL GONDERME
+def send_contact_email(full_name: str, sender_email: str, message: str):
+    """Kullanıcının iletişim formundan gönderdiği mesajı bebook.support@gmail.com'a iletir."""
+    smtp_email = "merveyilmazz0703@gmail.com"
+    smtp_password = "ockl wtne nrst imfs".replace(" ", "")
+    support_email = "merveyilmazz0703@gmail.com"  # Destek mailinin gideceği adres
+
+    subject = f"BeBook İletişim Formu - {full_name}"
+    body = f"""Yeni bir iletişim formu mesajı alındı.
+
+Gönderen: {full_name}
+E-posta: {sender_email}
+
+Mesaj:
+{message}
+
+---
+Bu mesaj BeBook uygulamasının iletişim formundan gönderilmiştir.
+"""
+
+    try:
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart()
+        msg['From'] = smtp_email
+        msg['To'] = support_email
+        msg['Reply-To'] = sender_email  # Cevap kullanıcıya gitsin
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(smtp_email, smtp_password)
+        server.sendmail(smtp_email, support_email, msg.as_string())
+        server.quit()
+
+        print(f"İletişim formu maili gönderildi: {full_name} <{sender_email}>")
+        return True
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"SMTP AUTH HATASI: {e}")
+        return False
+    except Exception as e:
+        print(f"İletişim formu mail hatası: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 
 # SIFRE SIFIRLAMA ISTEGI
 @app.post("/forgot-password")
@@ -1073,17 +1383,31 @@ async def forgot_password(data: dict):
             
         otp = generate_otp()
         
-        # Kodu hafizaya kaydediyoruz
-        otp_storage[email] = otp 
+        # Kodu ve oluşturulma zamanını hafızaya kaydediyoruz (2 dakika geçerli)
+        otp_storage[email] = {
+            "code": otp,
+            "created_at": datetime.now()
+        }
         
-        print(f"Email: {email}, OTP: {otp}") 
+        print(f"=" * 60)
+        print(f"DOGRULAMA KODU OLUSTURULDU")
+        print(f"Email: {email}")
+        print(f"OTP: {otp}")
+        print(f"=" * 60)
         
-        success = send_otp_email(email, otp) 
+        # Mail göndermeyi dene ama başarısız olsa bile devam et (geliştirme modu)
+        try:
+            send_otp_email(email, otp)
+        except Exception as mail_error:
+            print(f"Mail gonderim hatasi (devam ediliyor): {mail_error}")
         
-        if success:
-            return {"status": "success", "message": "Kod gonderildi"}
-        else:
-            return {"status": "error", "message": "Mail gonderimi basarisiz"}
+        # Geliştirme modunda her zaman başarılı dön
+        return {
+            "status": "success", 
+            "message": "Kod gonderildi",
+            "dev_mode": True,
+            "otp": otp  # SADECE GELİŞTİRME İÇİN - ÜRETİMDE KALDIRILMALI
+        }
             
     except Exception as e:
         print(f"Sistem Hatasi: {str(e)}")
@@ -1098,11 +1422,26 @@ async def verify_otp(data: dict):
     email = str(data.get("email")).strip().lower()
     user_otp = str(data.get("otp")).strip()
 
-    if email in otp_storage and str(otp_storage[email]) == user_otp:
-        return {"status": "success", "message": "Kod dogrulandi"}
+    if email in otp_storage:
+        stored = otp_storage[email]
+        # Eski format (sadece string) ile uyumluluk
+        if isinstance(stored, dict):
+            code = str(stored["code"])
+            created_at = stored["created_at"]
+            # 2 dakika = 120 saniye
+            elapsed = (datetime.now() - created_at).total_seconds()
+            if elapsed > 120:
+                del otp_storage[email]
+                return {"status": "error", "message": "Kodun suresi doldu! Yeni kod isteyin."}
+        else:
+            code = str(stored)
+        
+        if code == user_otp:
+            del otp_storage[email]  # Kullanılan kodu sil
+            return {"status": "success", "message": "Kod dogrulandi"}
     
     print(f"Hata detayi -> Hafizadaki: {otp_storage.get(email)}, Girilen: {user_otp}")
-    return {"status": "error", "message": "Kod eslesmedi!"}
+    return {"status": "error", "message": "Kod eslesmedi veya suresi doldu!"}
 
 # SIFRE SIFIRLAMA
 @app.post("/reset-password")
@@ -1143,3 +1482,175 @@ async def reset_password(data: dict):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# --- PROFİL FOTOĞRAFI YÜKLEME ---
+PROFILE_UPLOAD_DIR = "uploads/profiles"
+os.makedirs(PROFILE_UPLOAD_DIR, exist_ok=True)
+
+@app.get("/user/profile/{user_id}")
+async def get_user_profile(user_id: int):
+    """Kullanıcının profil bilgilerini döndürür (profil fotoğrafı dahil)"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id, email, profile_image_path, full_name FROM public.users WHERE user_id = %s",
+            (user_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Kullanici bulunamadi")
+        return {
+            "user_id": row[0],
+            "email": row[1],
+            "profile_image_path": row[2] or "",
+            "full_name": row[3] or ""
+        }
+    except Exception as e:
+        print(f"Profil getirme hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+@app.post("/user/upload_profile_photo/{user_id}")
+async def upload_profile_photo(user_id: int, file: UploadFile = File(...)):
+    conn = None
+    try:
+        # Dosya uzantısını al
+        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+        file_name = f"profile_{user_id}.{ext}"
+        file_path = os.path.join(PROFILE_UPLOAD_DIR, file_name)
+
+        # Dosyayı kaydet
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Path'i normalize et (Windows ters slash'ı düz slash'a çevir)
+        normalized_path = file_path.replace("\\", "/")
+
+        # Veritabanını güncelle
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE public.users SET profile_image_path = %s WHERE user_id = %s",
+            (normalized_path, user_id)
+        )
+        conn.commit()
+        cur.close()
+
+        print(f"Profil fotoğrafı yüklendi: user={user_id}, path={normalized_path}")
+        return {"status": "success", "image_path": normalized_path}
+
+    except Exception as e:
+        print(f"Profil fotoğrafı yükleme hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+# SATICI ICIN - Sattigi kitaplar
+@app.get("/my-sold-books/{user_id}")
+async def get_my_sold_books(user_id: int):
+    """Satıcının sattığı kitapları döndürür (kitap silinse bile orders'dan gelir)"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        user_row = cur.fetchone()
+        if not user_row:
+            return []
+        user_email = user_row[0]
+
+        cur.execute("""
+            SELECT DISTINCT ON (o.book_id)
+                o.book_id,
+                COALESCE(o.book_title, 'Kitap') as title,
+                COALESCE(o.book_author, '') as author,
+                o.price as paid_price,
+                o.book_image as image_path,
+                COALESCE(o.book_category, '') as category,
+                o.seller_email,
+                o.created_at as order_date,
+                buyer.email as buyer_email
+            FROM orders o
+            LEFT JOIN users buyer ON o.user_id = buyer.user_id
+            WHERE o.seller_email = %s AND o.status = 'SUCCESS'
+            ORDER BY o.book_id, o.created_at DESC
+        """, (user_email,))
+        rows = cur.fetchall()
+        rows = sorted(rows, key=lambda x: x[7] if x[7] else '', reverse=True)
+
+        result = []
+        for r in rows:
+            image_path = r[4]
+            if image_path:
+                if image_path.startswith('http'):
+                    image_url = image_path
+                elif image_path.startswith('/uploads/'):
+                    image_url = f"{BASE_URL}{image_path}"
+                else:
+                    image_url = f"{BASE_URL}/uploads/{image_path}"
+            else:
+                image_url = None
+
+            result.append({
+                "book_id": r[0],
+                "title": r[1],
+                "author": r[2],
+                "paid_price": float(r[3]) if r[3] else 0,
+                "price": float(r[3]) if r[3] else 0,
+                "image_path": image_url,
+                "category": r[5],
+                "seller_email": r[6],
+                "order_date": r[7].isoformat() if r[7] else None,
+                "buyer_email": r[8] or "Bilinmiyor",
+                "is_sold": True
+            })
+        return result
+    except Exception as e:
+        print(f"Satici satilan kitaplar hatasi: {e}")
+        return []
+    finally:
+        conn.close()
+
+# KULLANICI BİLGİLERİNİ GÜNCELLE
+class UpdateUserInfo(BaseModel):
+    user_id: int
+    university: Optional[str] = None
+    department: Optional[str] = None
+    full_name: Optional[str] = None
+
+@app.put("/user/update-info")
+async def update_user_info(data: UpdateUserInfo):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        updates = []
+        values = []
+        if data.university is not None:
+            updates.append("university = %s")
+            values.append(data.university)
+        if data.department is not None:
+            updates.append("department = %s")
+            values.append(data.department)
+        if data.full_name is not None:
+            updates.append("full_name = %s")
+            values.append(data.full_name)
+        
+        if not updates:
+            return {"status": "error", "message": "Güncellenecek alan yok"}
+        
+        values.append(data.user_id)
+        cur.execute(
+            f"UPDATE public.users SET {', '.join(updates)} WHERE user_id = %s",
+            values
+        )
+        conn.commit()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Kullanici guncelleme hatasi: {e}")
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()

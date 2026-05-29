@@ -91,7 +91,7 @@ class _PremiumAuthScreenState extends State<PremiumAuthScreen>
   }
 
   Future<void> _handleLogin() async {
-    const String apiUrl = "http://192.168.1.6:8001/login";
+    final String apiUrl = "${ApiService.baseUrl}/login";
 
     setState(() => _isLoading = true);
 
@@ -114,6 +114,14 @@ class _PremiumAuthScreenState extends State<PremiumAuthScreen>
         await prefs.setString('university', data['university']);
         await prefs.setString('department', data['department']);
         await prefs.setBool('is_logged_in', true);
+        // full_name kaydet
+        final fullName = data['full_name']?.toString() ?? '';
+        if (fullName.isNotEmpty) await prefs.setString('full_name', fullName);
+        // Profil fotoğrafı varsa kaydet, boş gelirse mevcut değeri koru
+        final profilePath = data['profile_image_path']?.toString() ?? '';
+        if (profilePath.isNotEmpty) {
+          await prefs.setString('profile_image_path', profilePath);
+        }
 
         if (mounted) {
           HapticFeedback.mediumImpact();

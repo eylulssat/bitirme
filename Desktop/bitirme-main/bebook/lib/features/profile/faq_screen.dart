@@ -5,67 +5,67 @@ class FAQScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Senin o meşhur "hoş mor" tonun
+    // Senin o me┼şhur "ho┼ş mor" tonun
     const Color primaryColor = Color(0xFF6C63FF);
 
     return Scaffold(
-      // Arka planı çok hafif bir gri yaparak beyaz kartların öne çıkmasını sağladık
+      // Arka plan─▒ ├ğok hafif bir gri yaparak beyaz kartlar─▒n ├Âne ├ğ─▒kmas─▒n─▒ sa─şlad─▒k
       backgroundColor: const Color(0xFFF9FAFF),
       appBar: AppBar(
         title: const Text(
-          "Sıkça Sorulan Sorular",
+          "S─▒k├ğa Sorulan Sorular",
           style: TextStyle(
               color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: Colors.white,
-        elevation: 0.5, // Çok hafif bir derinlik çizgisi
+        elevation: 0.5, // ├çok hafif bir derinlik ├ğizgisi
         centerTitle: true,
         iconTheme: const IconThemeData(color: primaryColor),
       ),
       body: ListView(
-        // BouncingScrollPhysics: Sayfayı kaydırırken o yumuşak "yay" efektini verir (iOS stili)
+        // BouncingScrollPhysics: Sayfay─▒ kayd─▒r─▒rken o yumu┼şak "yay" efektini verir (iOS stili)
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
         children: [
           _buildFAQItem(
-            "💳", // İkon ekledik
-            "Ödemeyi nasıl yapabilirim?",
-            "BEBOOK, iyzico güvenli ödeme altyapısını kullanır. Kitap satın alırken kart bilgilerinizle iyzico güvencesinde ödeme yapabilir, işleminiz tamamlanana kadar paranızı koruma altında tutabilirsiniz.",
+            "­şÆ│", // ─░kon ekledik
+            "├ûdemeyi nas─▒l yapabilirim?",
+            "BEBOOK, iyzico g├╝venli ├Âdeme altyap─▒s─▒n─▒ kullan─▒r. Kitap sat─▒n al─▒rken kart bilgilerinizle iyzico g├╝vencesinde ├Âdeme yapabilir, i┼şleminiz tamamlanana kadar paran─▒z─▒ koruma alt─▒nda tutabilirsiniz.",
             primaryColor,
           ),
           _buildFAQItem(
-            "📖",
-            "Kitap anlatıldığı gibi gelmezse?",
-            "Eğer teslim aldığınız kitap ilan açıklamasındaki gibi değilse, 'Destek' kısmından bizimle iletişime geçebilirsiniz. Gerekli incelemelerden sonra iyzico üzerinden iade süreciniz başlatılacaktır.",
+            "­şôû",
+            "Kitap anlat─▒ld─▒─ş─▒ gibi gelmezse?",
+            "E─şer teslim ald─▒─ş─▒n─▒z kitap ilan a├ğ─▒klamas─▒ndaki gibi de─şilse, 'Destek' k─▒sm─▒ndan bizimle ileti┼şime ge├ğebilirsiniz. Gerekli incelemelerden sonra iyzico ├╝zerinden iade s├╝reciniz ba┼şlat─▒lacakt─▒r.",
             primaryColor,
           ),
           _buildFAQItem(
-            "✨",
-            "Uygulamayı kullanmak ücretli mi?",
-            "Hayır, BEBOOK tamamen ücretsiz bir platformdur. İlan vermek, kitapları incelemek ve üye olmak için herhangi bir ücret ödemezsiniz.",
+            "Ô£¿",
+            "Uygulamay─▒ kullanmak ├╝cretli mi?",
+            "Hay─▒r, BEBOOK tamamen ├╝cretsiz bir platformdur. ─░lan vermek, kitaplar─▒ incelemek ve ├╝ye olmak i├ğin herhangi bir ├╝cret ├Âdemezsiniz.",
             primaryColor,
           ),
           _buildFAQItem(
-            "🔐",
-            "Şifremi unuttum, ne yapmalıyım?",
-            "Giriş ekranındaki 'Şifremi Unuttum' butonuna tıklayarak sisteme kayıtlı e-posta adresinizi giriniz. E-postanıza gönderilen 6 haneli doğrulama kodunu uygulamaya girerek yeni şifrenizi güvenle oluşturabilirsiniz.",
+            "­şöÉ",
+            "┼Şifremi unuttum, ne yapmal─▒y─▒m?",
+            "Giri┼ş ekran─▒ndaki '┼Şifremi Unuttum' butonuna t─▒klayarak sisteme kay─▒tl─▒ e-posta adresinizi giriniz. E-postan─▒za g├Ânderilen 6 haneli do─şrulama kodunu uygulamaya girerek yeni ┼şifrenizi g├╝venle olu┼şturabilirsiniz.",
             primaryColor,
           ),
           _buildFAQItem(
-            "⏳",
-            "İlanım ne kadar süre yayında kalır?",
-            "İlanınız, siz manuel olarak silene veya kitap satılana kadar yayında kalmaya devam eder.",
+            "ÔÅ│",
+            "─░lan─▒m ne kadar s├╝re yay─▒nda kal─▒r?",
+            "─░lan─▒n─▒z, siz manuel olarak silene veya kitap sat─▒lana kadar yay─▒nda kalmaya devam eder.",
             primaryColor,
           ),
           _buildFAQItem(
-            "💬",
-            "Mesaj ikonları (tikler) ne anlama geliyor?",
-            "• Tek Beyaz Tik: Mesajınız gönderildi.\n• Çift Beyaz Tik: Mesajınız alıcıya iletildi.\n• Çift Yeşil Tik: Mesajınız alıcı tarafından okundu.",
+            "­şÆ¼",
+            "Mesaj ikonlar─▒ (tikler) ne anlama geliyor?",
+            "ÔÇó Tek Beyaz Tik: Mesaj─▒n─▒z g├Ânderildi.\nÔÇó ├çift Beyaz Tik: Mesaj─▒n─▒z al─▒c─▒ya iletildi.\nÔÇó ├çift Ye┼şil Tik: Mesaj─▒n─▒z al─▒c─▒ taraf─▒ndan okundu.",
             primaryColor,
           ),
           const SizedBox(height: 20),
           const Text(
-            "Başka bir sorun mu var? Destek ekibine ulaşın.",
+            "Ba┼şka bir sorun mu var? Destek ekibine ula┼ş─▒n.",
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
@@ -83,21 +83,21 @@ class FAQScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16), // Daha oval, daha modern
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.06), // Morun çok hafif bir yansıması
+            color: color.withOpacity(0.06), // Morun ├ğok hafif bir yans─▒mas─▒
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Theme(
-        // ExpansionTile'ın içindeki o varsayılan çizgileri tamamen yok eder
+        // ExpansionTile'─▒n i├ğindeki o varsay─▒lan ├ğizgileri tamamen yok eder
         data: ThemeData().copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           iconColor: color,
           collapsedIconColor: Colors.grey.shade400,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading:
-              Text(icon, style: const TextStyle(fontSize: 20)), // Başta ikon
+              Text(icon, style: const TextStyle(fontSize: 20)), // Ba┼şta ikon
           title: Text(
             question,
             style: const TextStyle(
@@ -114,7 +114,7 @@ class FAQScreen extends StatelessWidget {
                 answer,
                 style: TextStyle(
                   color: Colors.grey.shade700,
-                  height: 1.6, // Satır aralığını açtık, okuması kolaylaştı
+                  height: 1.6, // Sat─▒r aral─▒─ş─▒n─▒ a├ğt─▒k, okumas─▒ kolayla┼şt─▒
                   fontSize: 14,
                 ),
               ),

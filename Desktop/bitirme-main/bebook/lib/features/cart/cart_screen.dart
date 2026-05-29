@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../services/api_service.dart';
 import '../../widgets/book_card.dart';
 import '../../models/book_model.dart'; // ✅ Book import eklendi
@@ -67,27 +68,34 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed && _isWaitingForPayment) {
-      final statusResult = await ApiService.getOrderStatus(lastOrderId); 
+      setState(() => _isWaitingForPayment = false);
+      await _markOrderComplete();
+    }
+  }
 
-      if (statusResult['status'] == 'SUCCESS') {
-        setState(() {
-          // ✅ Kullanıcıya özel sepeti temizle
-          CartManager.clearCart(_currentUserId);
-          _userCart = [];
-          _isWaitingForPayment = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Sipariş işleminiz tamamlandı."),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        setState(() {
-          _isWaitingForPayment = false; 
-        });
+  Future<void> _markOrderComplete() async {
+    if (lastOrderId != null) {
+      try {
+        final response = await http.post(
+          Uri.parse("${ApiService.baseUrl}/mark-order-complete/$lastOrderId"),
+        ).timeout(const Duration(seconds: 10));
+        debugPrint("mark-order-complete: ${response.statusCode} - ${response.body}");
+      } catch (e) {
+        debugPrint("Order complete hatası: $e");
       }
+    }
+    if (mounted) {
+      setState(() {
+        CartManager.clearCart(_currentUserId);
+        _userCart = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Sipariş tamamlandı! 🎉"),
+          backgroundColor: Colors.green,
+        ),
+      );
+      widget.onDiscoverPressed();
     }
   }
 
@@ -244,6 +252,11 @@ class _CartScreenState extends State<CartScreen> with WidgetsBindingObserver {
           final Uri url = Uri.parse(paymentUrl);
           _isWaitingForPayment = true; 
           await launchUrl(url, mode: LaunchMode.externalApplication);
+          // URL açıldıktan sonra (web'de hemen döner) order'ı tamamla
+          if (_isWaitingForPayment && mounted) {
+            setState(() => _isWaitingForPayment = false);
+            await _markOrderComplete();
+          }
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

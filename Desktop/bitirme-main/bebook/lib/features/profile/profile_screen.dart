@@ -1,16 +1,21 @@
 import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'ultra_premium_auth_screen.dart'; // 💎 Ultra Premium auth
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'ultra_premium_auth_screen.dart';
 import 'contact_support_screen.dart';
 import 'about_bebook_screen.dart';
-import 'faq_screen.dart'; // ❓ FAQ Screen
-import 'premium_favorites_screen.dart'; // 💎 Premium favorites
-import '../../widgets/premium_book_card.dart'; // 💎 Premium book card
+import 'premium_favorites_screen.dart';
+import '../../widgets/premium_book_card.dart';
 import '../../services/api_service.dart';
 import '../../models/book_model.dart';
-import '../../core/theme/app_theme.dart'; // 💎 Premium theme
+import '../../core/theme/app_theme.dart';
+import '../../features/main_wrapper.dart'; // logoutNotifier için
+import 'sold_books_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -27,9 +32,22 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
   String? userEmail;
   String? userUniversity;
   String? userDepartment;
+  String? userFullName;
   int? userId;
+  String? profileImagePath; // Profil fotoğrafı yolu
 
-  final String baseUrl = "http://192.168.1.6:8001/uploads/";  // LOKAL IP GÜNCELLENDİ
+  final String baseUrl = "${ApiService.baseUrl}/uploads/";
+
+  /// Backend'den gelen path'i tam URL'e çevirir
+  /// "uploads/profiles/x.png" → "http://host:8001/uploads/profiles/x.png"
+  /// "/uploads/profiles/x.png" → "http://host:8001/uploads/profiles/x.png"
+  /// "http://..." → olduğu gibi
+  String _buildImageUrl(String path) {
+    if (path.isEmpty) return '';
+    if (path.startsWith('http')) return path;
+    final clean = path.startsWith('/') ? path.substring(1) : path;
+    return '${ApiService.baseUrl}/$clean';
+  }
 
   // Animation controllers for premium effects
   late AnimationController _backgroundController;
@@ -92,7 +110,39 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
         userEmail = prefs.getString('user_email');
         userUniversity = prefs.getString('university');
         userDepartment = prefs.getString('department');
+        userFullName = prefs.getString('full_name');
+        // SharedPreferences'tan oku
+        profileImagePath = prefs.getString('profile_image_path');
       });
+
+      // Her zaman backend'den güncel profil fotoğrafını çek
+      _fetchProfileImageFromBackend(id, prefs);
+      fetchMyBooks();
+    }
+  }
+
+  Future<void> _fetchProfileImageFromBackend(int id, SharedPreferences prefs) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiService.baseUrl}/user/profile/$id"),
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final path = data['profile_image_path']?.toString() ?? '';
+        final fullName = data['full_name']?.toString() ?? '';
+        debugPrint("Backend'den gelen profil path: $path");
+        if (path.isNotEmpty && mounted) {
+          await prefs.setString('profile_image_path', path);
+          setState(() => profileImagePath = path);
+        }
+        if (fullName.isNotEmpty && mounted) {
+          await prefs.setString('full_name', fullName);
+          setState(() => userFullName = fullName);
+        }
+      }
+    } catch (e) {
+      debugPrint("Profil fotoğrafı çekme hatası: $e");
     }
   }
 
@@ -115,7 +165,332 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
     }
   }
 
-  @override
+  // Profil bilgilerini düzenle
+  Future<void> _showEditProfileDialog() async {
+    HapticFeedback.lightImpact();
+
+    final List<String> universities = [
+      'Zonguldak Bülent Ecevit Üniversitesi',
+      'İstanbul Teknik Üniversitesi',
+      'Orta Doğu Teknik Üniversitesi',
+      'Boğaziçi Üniversitesi',
+      'Hacettepe Üniversitesi',
+      'Bilkent Üniversitesi',
+      'Koç Üniversitesi',
+      'Sabancı Üniversitesi',
+      'Diğer',
+    ];
+    final List<String> departments = [
+      'Bilgisayar Mühendisliği',
+      'Elektrik-Elektronik Mühendisliği',
+      'Makine Mühendisliği',
+      'Endüstri Mühendisliği',
+      'İktisat',
+      'İşletme',
+      'Tıp',
+      'Diş Hekimliği',
+      'Eczacılık',
+      'Psikoloji',
+      'İstatistik',
+      'Matematik',
+      'Fizik',
+      'Kimya',
+      'Yönetim Bilişim Sistemleri',
+      'Diğer',
+    ];
+
+    String? selectedUniversity = universities.contains(userUniversity)
+        ? userUniversity
+        : null;
+    String? selectedDepartment = departments.contains(userDepartment)
+        ? userDepartment
+        : null;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.edit_rounded,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text("Bilgileri Düzenle",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Üniversite
+                DropdownButtonFormField<String>(
+                  value: selectedUniversity,
+                  decoration: InputDecoration(
+                    labelText: "Üniversite",
+                    prefixIcon: const Icon(Icons.school_rounded),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: AppTheme.primaryIndigo, width: 2),
+                    ),
+                  ),
+                  items: universities
+                      .map((u) => DropdownMenuItem(value: u, child: Text(u, overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setDialogState(() => selectedUniversity = v),
+                  isExpanded: true,
+                ),
+                const SizedBox(height: 16),
+                // Bölüm
+                DropdownButtonFormField<String>(
+                  value: selectedDepartment,
+                  decoration: InputDecoration(
+                    labelText: "Bölüm",
+                    prefixIcon: const Icon(Icons.auto_stories_rounded),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: AppTheme.primaryIndigo, width: 2),
+                    ),
+                  ),
+                  items: departments
+                      .map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setDialogState(() => selectedDepartment = v),
+                  isExpanded: true,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("İptal",
+                  style: TextStyle(color: AppTheme.neutralDark)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryIndigo,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _updateUserInfo(
+                    selectedUniversity, selectedDepartment);
+              },
+              child: const Text("Kaydet",
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateUserInfo(
+      String? university, String? department) async {
+    if (userId == null) return;
+    try {
+      final response = await http.put(
+        Uri.parse("${ApiService.baseUrl}/user/update-info"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "user_id": userId,
+          "university": university,
+          "department": department,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          // SharedPreferences güncelle
+          final prefs = await SharedPreferences.getInstance();
+          if (university != null) {
+            await prefs.setString('university', university);
+          }
+          if (department != null) {
+            await prefs.setString('department', department);
+          }
+          if (mounted) {
+            setState(() {
+              userUniversity = university;
+              userDepartment = department;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 12),
+                    Text("Bilgiler güncellendi!"),
+                  ],
+                ),
+                backgroundColor: AppTheme.successGreen,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Profil güncelleme hatası: $e");
+    }
+  }
+
+  // Profil fotoğrafı seç ve yükle
+  Future<void> _pickAndUploadProfilePhoto() async {
+    HapticFeedback.lightImpact();
+    final picker = ImagePicker();
+
+    // Seçenek sun: galeri veya kamera
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Profil Fotoğrafı",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryIndigo.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.photo_library_rounded, color: AppTheme.primaryIndigo),
+                ),
+                title: const Text("Galeriden Seç"),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.camera_alt_rounded, color: AppTheme.accentOrange),
+                ),
+                title: const Text("Kamerayı Aç"),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    try {
+      final XFile? picked = await picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 800,
+      );
+      if (picked == null) return;
+
+      // Yükleniyor göster
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                SizedBox(width: 12),
+                Text("Fotoğraf yükleniyor..."),
+              ],
+            ),
+            duration: Duration(seconds: 10),
+            backgroundColor: Colors.blueGrey,
+          ),
+        );
+      }
+
+      final imagePath = await ApiService.uploadProfilePhotoXFile(userId!, picked);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (imagePath != null) {
+        // Backend'den gelen gerçek path'i kaydet
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile_image_path', imagePath);
+
+        if (mounted) {
+          setState(() => profileImagePath = imagePath);
+        }
+
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text("Profil fotoğrafı güncellendi!"),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Fotoğraf yüklenemedi, tekrar dene."),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Fotoğraf yükleme hatası: $e");
+    }
+  }
   Widget build(BuildContext context) {
     if (isLoggedIn && myBooks.isEmpty && !isLoading && userId != null) {
       fetchMyBooks();
@@ -400,16 +775,26 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
                     );
 
                     if (result != null && result is Map) {
+                      final prefs = await SharedPreferences.getInstance();
+                      final imgPath = result['profile_image_path']?.toString() ?? '';
+                      if (imgPath.isNotEmpty) {
+                        await prefs.setString('profile_image_path', imgPath);
+                      }
+                      final fullName = result['full_name']?.toString() ?? '';
+                      if (fullName.isNotEmpty) {
+                        await prefs.setString('full_name', fullName);
+                      }
                       setState(() {
                         isLoggedIn = true;
                         userEmail = result['user_email'];
                         userUniversity = result['university'];
                         userDepartment = result['department'];
                         userId = result['user_id'];
+                        userFullName = fullName.isNotEmpty ? fullName : null;
+                        if (imgPath.isNotEmpty) profileImagePath = imgPath;
                       });
                       fetchMyBooks();
-                    }
-                  },
+                    }                  },
                 ),
                 
                 const SizedBox(height: 16),
@@ -552,25 +937,68 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
             ),
             child: Row(
               children: [
-                // Premium avatar
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppTheme.primaryGradient,
-                    boxShadow: AppTheme.shadowPrimary,
-                  ),
-                  child: Center(
-                    child: Text(
-                      (userEmail != null && userEmail!.isNotEmpty)
-                          ? userEmail![0].toUpperCase()
-                          : "?",
-                      style: AppTheme.textTheme.displaySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                // Tıklanabilir profil fotoğrafı avatarı
+                GestureDetector(
+                  onTap: _pickAndUploadProfilePhoto,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppTheme.primaryGradient,
+                          boxShadow: AppTheme.shadowPrimary,
+                        ),
+                        child: ClipOval(
+                          child: profileImagePath != null && profileImagePath!.isNotEmpty
+                              ? Image.network(
+                                  _buildImageUrl(profileImagePath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Center(
+                                    child: Text(
+                                      (userEmail != null && userEmail!.isNotEmpty)
+                                          ? userEmail![0].toUpperCase()
+                                          : "?",
+                                      style: AppTheme.textTheme.displaySmall?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    (userEmail != null && userEmail!.isNotEmpty)
+                                        ? userEmail![0].toUpperCase()
+                                        : "?",
+                                    style: AppTheme.textTheme.displaySmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                        ),
                       ),
-                    ),
+                      // Kamera ikonu — fotoğraf ekle/değiştir
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentOrange,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 
@@ -581,12 +1009,33 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        userEmail ?? "E-posta bulunamadı",
-                        style: AppTheme.textTheme.titleLarge?.copyWith(
-                          color: AppTheme.primaryIndigo,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              userFullName != null && userFullName!.isNotEmpty
+                                  ? userFullName!
+                                  : userEmail ?? "Kullanıcı",
+                              style: AppTheme.textTheme.titleLarge?.copyWith(
+                                color: AppTheme.primaryIndigo,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          // Düzenleme butonu
+                          GestureDetector(
+                            onTap: _showEditProfileDialog,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryIndigo.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.edit_rounded,
+                                  size: 16, color: AppTheme.primaryIndigo),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -651,34 +1100,15 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
       },
       {
         'icon': Icons.assignment_turned_in_outlined,
-        'title': 'Satılan Kitaplarım',
+        'title': 'Satış Geçmişim',
         'subtitle': 'Satış geçmişini görüntüle',
         'gradient': AppTheme.sunsetGradient,
-        'onTap': () {
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text("Bu özellik yakında eklenecek."),
-              backgroundColor: AppTheme.infoBlue,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          );
-        },
-      },
-      {
-        'icon': Icons.help_outline_rounded,
-        'title': 'Sıkça Sorulan Sorular',
-        'subtitle': 'Merak ettiklerini öğren',
-        'gradient': AppTheme.primaryGradient,
         'onTap': () {
           HapticFeedback.lightImpact();
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const FAQScreen(),
+              builder: (context) => const SoldBooksScreen(),
             ),
           );
         },
@@ -1177,36 +1607,33 @@ class ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMi
     await prefs.remove('user_email');
     await prefs.remove('university');
     await prefs.remove('department');
+    await prefs.remove('full_name');
+    // profile_image_path'i silmiyoruz — tekrar giriş yapınca backend'den gelecek
     await prefs.setBool('is_logged_in', false);
     
-    // 2. Global sepeti temizle (CartManager'ı import etmemiz gerekiyor)
-    // CartManager.clearAllCarts();
+    // 2. Global logout bildirimi gönder — MainWrapper'ın _loadUser çağırmasını sağlar
+    logoutNotifier.value = true;
     
-    // 3. Global logout bildirimi gönder
-    // logoutNotifier.value = true;
+    // 3. Kısa bir gecikme sonra notifier'ı sıfırla
+    await Future.delayed(const Duration(milliseconds: 200));
+    logoutNotifier.value = false;
     
-    // 4. Kısa bir gecikme sonra notifier'ı sıfırla
-    await Future.delayed(const Duration(milliseconds: 100));
-    // logoutNotifier.value = false;
-    
-    // 5. Local state'i temizle
+    // 4. Local state'i temizle
     if (mounted) {
       setState(() {
         isLoggedIn = false;
         userEmail = null;
         userId = null;
+        userFullName = null;
+        profileImagePath = null;
         myBooks = [];
       });
       
-      // 6. Kullanıcıya bildirim göster
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              Icon(
-                Icons.check_circle,
-                color: Colors.white,
-              ),
+              const Icon(Icons.check_circle, color: Colors.white),
               const SizedBox(width: 12),
               const Text("Çıkış yapıldı. Tüm veriler temizlendi."),
             ],

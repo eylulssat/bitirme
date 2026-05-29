@@ -531,78 +531,69 @@ class _PremiumBookDetailScreenState extends State<PremiumBookDetailScreen>
             ],
           ),
           child: SafeArea(
-            child: Row(
-              children: [
-                // --- MESAJLAŞMA BUTONU ---
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: AppTheme.primaryGradient,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryIndigo.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      if (_currentUserId == null) {
-                        _showSnackBar("Mesaj göndermek için giriş yapmalısınız", AppTheme.warningAmber);
-                        return;
-                      }
-                      // Kendi kitabına mesaj gönderme
-                      if (widget.book.userId == _currentUserId) {
-                        _showSnackBar("Kendi ilanınıza mesaj gönderemezsiniz", AppTheme.warningAmber);
-                        return;
-                      }
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatDetailScreen(
-                            receiverId: widget.book.userId ?? 0,
-                            receiverName: widget.book.sellerEmail?.split('@').first ?? 'Satıcı',
-                            receiverImage: null,
-                            bookTitle: widget.book.title,
-                            bookId: widget.book.id,
-                            myId: _currentUserId!,
-                            myName: _currentUserName,
-                          ),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      minimumSize: const Size(64, 60),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Icon(
-                      Icons.chat_rounded,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // --- SATIN AL BUTONU ---
-                Expanded(
-                  child: Container(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  // --- MESAJLAŞMA BUTONU ---
+                  Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: AppTheme.primaryGradient,
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.accentOrange.withOpacity(0.4),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                          color: AppTheme.primaryIndigo.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        if (_currentUserId == null) {
+                          _showSnackBar("Mesaj göndermek için giriş yapmalısınız", AppTheme.warningAmber);
+                          return;
+                        }
+                        if (widget.book.userId == _currentUserId) {
+                          _showSnackBar("Kendi ilanınıza mesaj gönderemezsiniz", AppTheme.warningAmber);
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatDetailScreen(
+                              receiverId: widget.book.userId ?? 0,
+                              receiverName: widget.book.sellerEmail?.split('@').first ?? 'Satıcı',
+                              receiverImage: null,
+                              bookTitle: widget.book.title,
+                              bookId: widget.book.id,
+                              myId: _currentUserId!,
+                              myName: _currentUserName,
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        minimumSize: const Size(56, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Icon(
+                        Icons.chat_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // --- SATIN AL BUTONU ---
+                  Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
                         HapticFeedback.mediumImpact();
@@ -641,20 +632,20 @@ class _PremiumBookDetailScreenState extends State<PremiumBookDetailScreen>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.accentOrange,
                         foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 60),
+                        minimumSize: const Size(double.infinity, 52),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 0,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.shopping_cart_rounded, size: 26),
-                          const SizedBox(width: 12),
+                          const Icon(Icons.shopping_cart_rounded, size: 22),
+                          const SizedBox(width: 8),
                           Text(
                             "Satın Al",
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
@@ -663,8 +654,8 @@ class _PremiumBookDetailScreenState extends State<PremiumBookDetailScreen>
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'forgot_password_screen.dart';
@@ -35,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // BACKEND BAĞLANTI FONKSİYONU
   Future<void> _handleLogin() async {
     // LOKAL IP ADRESİNİZ - GÜNCELLENDİ
-    const String apiUrl = "http://192.168.1.6:8001/login"; 
+    final String apiUrl = (kIsWeb ? "http://localhost:8002" : "http://192.168.1.103:8002") + "/login";
 
     setState(() => _isLoading = true);
 
@@ -58,7 +59,15 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('user_email', data['user_email']);
         await prefs.setString('university', data['university']);
         await prefs.setString('department', data['department']);
-        await prefs.setBool('is_logged_in', true); // GİRİŞ BAYRAGI
+        await prefs.setBool('is_logged_in', true);
+        // full_name kaydet
+        final fullName = data['full_name']?.toString() ?? '';
+        if (fullName.isNotEmpty) await prefs.setString('full_name', fullName);
+        // Profil fotoğrafı varsa kaydet, boş gelirse mevcut değeri koru
+        final profilePath = data['profile_image_path']?.toString() ?? '';
+        if (profilePath.isNotEmpty) {
+          await prefs.setString('profile_image_path', profilePath);
+        }
         
         if (mounted) {
           // ProfileScreen'in beklediği tüm verileri (özellikle user_id) gönderiyoruz

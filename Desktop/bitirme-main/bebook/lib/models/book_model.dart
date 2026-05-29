@@ -38,6 +38,13 @@ class Book {
 
   // Gelen JSON'ı Flutter nesnesine dönüştüren fonksiyon
   factory Book.fromJson(Map<String, dynamic> json) {
+    // image_path bazen float (0.0) gelebilir, güvenli dönüşüm yap
+    String safeImagePath = '';
+    final rawImage = json['image_path'];
+    if (rawImage != null && rawImage is String && rawImage.isNotEmpty) {
+      safeImagePath = rawImage;
+    }
+
     return Book(
       id: json['book_id'] ?? json['id'] ?? 0,
       title: json['title'] ?? 'İsimsiz Kitap',
@@ -46,13 +53,13 @@ class Book {
       price: double.tryParse(json['price'].toString()) ?? 0.0,
       description: json['description'] ?? '',
       sellerEmail: json['seller_email'] ?? '',
-      imagePath: json['image_path'] ?? '', // DB'deki sütun adıyla birebir aynı
+      imagePath: safeImagePath,
       isSold: json['is_sold'] ?? false,
       createdAt: json['created_at']?.toString() ?? '',
       publisher: json['publisher'] ?? '',
       userId: json['user_id'] ?? 0,
       email: json['email'] ?? '',
-      university: json['university'] ?? 'Belirtilmemiş', // Okul bilgisi buraya oturacak
+      university: json['university'] ?? 'Belirtilmemiş',
       department: json['department'] ?? '',
     );
   }

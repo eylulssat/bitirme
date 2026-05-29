@@ -65,18 +65,18 @@ class _PremiumFavoritesScreenState extends State<PremiumFavoritesScreen>
   }
 
   void _onFavoriteChanged() {
-    _loadFavorites();
+    if (mounted) {
+      _loadFavorites();
+    }
   }
 
   void _handleLogout() {
-    if (logoutNotifier.value == true) {
-      if (mounted) {
-        setState(() {
-          _favoriteBooks = [];
-          _currentUserId = null;
-          _isLoading = false;
-        });
-      }
+    if (logoutNotifier.value == true && mounted) {
+      setState(() {
+        _favoriteBooks = [];
+        _currentUserId = null;
+        _isLoading = false;
+      });
     }
   }
 
@@ -86,20 +86,22 @@ class _PremiumFavoritesScreenState extends State<PremiumFavoritesScreen>
       final userId = prefs.getInt('user_id');
 
       if (userId != null) {
-        setState(() => _currentUserId = userId);
+        if (mounted) setState(() => _currentUserId = userId);
 
         final rawData = await ApiService.getFavorites(userId);
         final favorites = rawData.map((json) => Book.fromJson(json)).toList();
 
-        setState(() {
-          _favoriteBooks = favorites;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _favoriteBooks = favorites;
+            _isLoading = false;
+          });
+        }
       } else {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -157,155 +159,67 @@ class _PremiumFavoritesScreenState extends State<PremiumFavoritesScreen>
 
   Widget _buildPremiumHeader() {
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: 80,
       floating: false,
       pinned: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      leading: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.pop(context);
-                },
-              ),
-            ),
-          ),
-        ),
+      backgroundColor: Colors.white,
+      elevation: 0.5,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.primaryIndigo),
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          Navigator.pop(context);
+        },
       ),
       actions: [
         if (_favoriteBooks.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      setState(() => _isLoading = true);
-                      _loadFavorites();
-                    },
-                  ),
-                ),
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primaryIndigo),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              setState(() => _isLoading = true);
+              _loadFavorites();
+            },
           ),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withOpacity(0.8),
-                    Colors.white.withOpacity(0.6),
-                  ],
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppTheme.accentOrange, AppTheme.accentPink],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Favorilerim",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppTheme.primaryIndigo,
                 ),
               ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.accentOrange,
-                              AppTheme.accentPink,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.accentOrange.withOpacity(0.4),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.favorite_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) =>
-                                  LinearGradient(
-                                    colors: [
-                                      AppTheme.accentOrange,
-                                      AppTheme.accentPink,
-                                    ],
-                                  ).createShader(bounds),
-                              child: Text(
-                                "Favorilerim",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                              ),
-                            ),
-                            if (_favoriteBooks.isNotEmpty)
-                              Text(
-                                "${_favoriteBooks.length} kitap",
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppTheme.neutralDark,
-                                    ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+              if (_favoriteBooks.isNotEmpty)
+                Text(
+                  "${_favoriteBooks.length} kitap",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.neutralDark,
                   ),
                 ),
-              ),
-            ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
-
   Widget _buildLoadingState() {
     return SliverFillRemaining(
       child: Center(
@@ -481,16 +395,10 @@ class _PremiumFavoritesScreenState extends State<PremiumFavoritesScreen>
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            return FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: PremiumBookCard(
-                  book: _favoriteBooks[index],
-                  index: index,
-                  onUpdated: _loadFavorites,
-                ),
-              ),
+            return PremiumBookCard(
+              book: _favoriteBooks[index],
+              index: index,
+              onUpdated: _loadFavorites,
             );
           },
           childCount: _favoriteBooks.length,
@@ -499,7 +407,7 @@ class _PremiumFavoritesScreenState extends State<PremiumFavoritesScreen>
           crossAxisCount: 2,
           crossAxisSpacing: 20,
           mainAxisSpacing: 20,
-          childAspectRatio: 0.55,
+          childAspectRatio: 0.46,
         ),
       ),
     );

@@ -74,32 +74,36 @@ class _PremiumBookCardState extends State<PremiumBookCard>
       curve: Curves.elasticOut,
     ));
     
-    // Shimmer animation
+    // Shimmer animation — devre dışı bırakıldı (dispose hatası veriyordu)
     _shimmerController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
-    )..repeat();
+    );
     _shimmerAnimation = Tween<double>(begin: -2, end: 2).animate(
       CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
     );
+    // repeat() kaldırıldı
     
     logoutNotifier.addListener(_handleLogout);
-    favoriteChangeNotifier.addListener(_onFavoriteChanged);
+    // favoriteChangeNotifier listener kaldırıldı — GlobalKey çakışmasına yol açıyordu
   }
 
   @override
   void dispose() {
+    _hoverController.stop();
+    _favoriteController.stop();
+    _shimmerController.stop();
     _hoverController.dispose();
     _favoriteController.dispose();
     _shimmerController.dispose();
     logoutNotifier.removeListener(_handleLogout);
-    favoriteChangeNotifier.removeListener(_onFavoriteChanged);
     super.dispose();
   }
 
   void _onFavoriteChanged() {
-    // Favori değişince bu kartın durumunu yenile
-    _loadUserAndCheckFavorite();
+    if (mounted) {
+      _loadUserAndCheckFavorite();
+    }
   }
 
   void _handleLogout() {
@@ -241,49 +245,52 @@ class _PremiumBookCardState extends State<PremiumBookCard>
                               children: [
                                 _buildImageSection(),
                                 Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(widget.isMyPost ? 10 : 16),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              widget.book.title,
-                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                height: 1.2,
-                                                letterSpacing: -0.3,
-                                                fontSize: 13,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Row(
+                                  child: ClipRect(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(10),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Flexible(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.person_outline_rounded, size: 12, color: AppTheme.neutralDark),
-                                                const SizedBox(width: 4),
-                                                Expanded(
-                                                  child: Text(
-                                                    widget.book.author,
-                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                      color: AppTheme.neutralDark,
-                                                      fontSize: 11,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                Text(
+                                                  widget.book.title,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                    height: 1.2,
                                                   ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.person_outline_rounded, size: 11, color: Colors.grey),
+                                                    const SizedBox(width: 3),
+                                                    Expanded(
+                                                      child: Text(
+                                                        widget.book.author,
+                                                        style: const TextStyle(
+                                                          color: Colors.grey,
+                                                          fontSize: 10,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ],
                                             ),
-                                          ],
-                                        ),
-                                        _buildBottomSection(),
-                                      ],
+                                          ),
+                                          _buildBottomSection(),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -657,46 +664,22 @@ class _PremiumBookCardState extends State<PremiumBookCard>
       children: [
         // Fiyat
         Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.isMyPost ? 8 : 12,
-            vertical: widget.isMyPost ? 5 : 8,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           decoration: BoxDecoration(
             gradient: AppTheme.primaryGradient,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryIndigo.withOpacity(0.3),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "${widget.book.price.toStringAsFixed(0)}",
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Text(
-                "₺",
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 10,
-                ),
-              ),
-            ],
+          child: Text(
+            "${widget.book.price.toStringAsFixed(0)} ₺",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
           ),
         ),
 
-        const SizedBox(height: 6),
+        const SizedBox(height: 3),
 
         // Sepete ekle butonu (başkasının ilanı)
         if (!widget.isMyPost)
@@ -705,15 +688,17 @@ class _PremiumBookCardState extends State<PremiumBookCard>
               HapticFeedback.mediumImpact();
               final prefs = await SharedPreferences.getInstance();
               final userId = prefs.getInt('user_id');
-
               if (userId == null) {
                 _showSnackBar("Sepete eklemek için giriş yapmalısınız", AppTheme.warningAmber);
                 return;
               }
-
+              // Kendi kitabını sepete ekleyemez
+              if (widget.book.userId == userId) {
+                _showSnackBar("Kendi ilanınızı sepete ekleyemezsiniz", AppTheme.warningAmber);
+                return;
+              }
               final userCart = CartManager.getCart(userId);
               final isAlreadyInCart = userCart.any((item) => item.id == widget.book.id);
-
               if (!isAlreadyInCart) {
                 CartManager.addToCart(userId, widget.book);
                 _showSnackBar("Sepete eklendi!", AppTheme.successGreen);
@@ -723,22 +708,26 @@ class _PremiumBookCardState extends State<PremiumBookCard>
             },
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 6),
               decoration: BoxDecoration(
                 gradient: AppTheme.accentGradient,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.accentOrange.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 13),
+                  SizedBox(width: 4),
+                  Text(
+                    "Sepete Ekle",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
-              ),
-              child: const Icon(
-                Icons.shopping_bag_outlined,
-                color: Colors.white,
-                size: 18,
               ),
             ),
           ),

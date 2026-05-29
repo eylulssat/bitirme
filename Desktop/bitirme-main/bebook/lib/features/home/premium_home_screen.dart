@@ -7,6 +7,7 @@ import '../../widgets/book_card.dart';
 import '../../models/book_model.dart';
 import '../../services/api_service.dart';
 import '../post_ad/premium_add_product_screen.dart';
+import 'premium_book_detail_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 💎 Premium Ana Sayfa - Glassmorphism & Advanced UI
@@ -177,14 +178,31 @@ class PremiumHomeScreenState extends State<PremiumHomeScreen>
     setState(() => _isLoading = true);
     try {
       final rawData = await ApiService.fetchBooks();
+      if (rawData.isEmpty) {
+        // Boş gelirse 2 saniye sonra bir kez daha dene
+        await Future.delayed(const Duration(seconds: 2));
+        final retryData = await ApiService.fetchBooks();
+        final books = retryData.map((json) => Book.fromJson(json)).toList();
+        if (mounted) {
+          setState(() {
+            _allBooks = books;
+            _filteredBooks = books;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
       final books = rawData.map((json) => Book.fromJson(json)).toList();
-      setState(() {
-        _allBooks = books;
-        _filteredBooks = books;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allBooks = books;
+          _filteredBooks = books;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint("Kitap yükleme hatası: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -572,7 +590,7 @@ class PremiumHomeScreenState extends State<PremiumHomeScreen>
         
         // Recommendations list
         SizedBox(
-          height: 280,
+          height: 300,
           child: _isLoadingRecommendations
               ? Center(
                   child: CircularProgressIndicator(
@@ -582,28 +600,248 @@ class PremiumHomeScreenState extends State<PremiumHomeScreen>
                 )
               : _recommendedBooks.isEmpty
                   ? Center(
-                      child: Text(
-                        "Henüz öneri oluşturulamadı",
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.neutralDark,
-                        ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off_rounded, size: 48, color: AppTheme.neutralDark.withOpacity(0.4)),
+                          const SizedBox(height: 12),
+                          Text(
+                            "Bölümünüze uygun kitap bulunamadı",
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.neutralDark,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Bölümünüzle ilgili kitaplar eklenince burada görünecek",
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.neutralDark.withOpacity(0.6),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     )
-                  : ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: _recommendedBooks.length,
-                      itemBuilder: (context, index) {
-                        return Container(
-                          width: 160,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          child: PremiumBookCard(
-                            book: _recommendedBooks[index],
-                            index: index,
-                          ),
-                        );
-                      },
+                  : SizedBox(
+                      height: 300,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _recommendedBooks.length,
+                        itemBuilder: (context, index) {
+                          final book = _recommendedBooks[index];
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PremiumBookDetailScreen(
+                                    book: book,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 150,
+                              margin: const EdgeInsets.symmetric(horizontal: 6),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryIndigo.withOpacity(0.1),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(24),
+                                child: Stack(
+                                  children: [
+                                    // Arka plan gradient
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              AppTheme.neutralWhite,
+                                              AppTheme.primaryIndigo.withOpacity(0.03),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        // Görsel
+                                        Expanded(
+                                          flex: 6,
+                                          child: ClipRRect(
+                                            borderRadius: const BorderRadius.vertical(
+                                                top: Radius.circular(24)),
+                                            child: Image.network(
+                                              book.imagePath.isNotEmpty
+                                                  ? book.imagePath
+                                                  : "https://via.placeholder.com/150",
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: AppTheme.primaryGradient,
+                                                ),
+                                                child: const Icon(Icons.book_rounded,
+                                                    color: Colors.white, size: 40),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        // Bilgi kısmı
+                                        Expanded(
+                                          flex: 5,
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  book.title,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 11,
+                                                    height: 1.2,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  children: [
+                                                    const Icon(
+                                                        Icons.person_outline_rounded,
+                                                        size: 10,
+                                                        color: Colors.grey),
+                                                    const SizedBox(width: 2),
+                                                    Expanded(
+                                                      child: Text(
+                                                        book.author,
+                                                        style: const TextStyle(
+                                                            color: Colors.grey,
+                                                            fontSize: 9),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const Spacer(),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    gradient: AppTheme.primaryGradient,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    "${book.price.toStringAsFixed(0)} ₺",
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 10,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                GestureDetector(
+                                                  onTap: () async {
+                                                    HapticFeedback.mediumImpact();
+                                                    final prefs = await SharedPreferences.getInstance();
+                                                    final userId = prefs.getInt('user_id');
+                                                    if (userId == null) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: const Text("Sepete eklemek için giriş yapın"),
+                                                          backgroundColor: AppTheme.warningAmber,
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    if (book.userId == userId) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: const Text("Kendi ilanınızı ekleyemezsiniz"),
+                                                          backgroundColor: AppTheme.warningAmber,
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    final cart = CartManager.getCart(userId);
+                                                    if (!cart.any((b) => b.id == book.id)) {
+                                                      CartManager.addToCart(userId, book);
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: const Text("Sepete eklendi!"),
+                                                          backgroundColor: AppTheme.successGreen,
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                        ),
+                                                      );
+                                                    } else {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: const Text("Zaten sepetinizde!"),
+                                                          backgroundColor: AppTheme.warningAmber,
+                                                          behavior: SnackBarBehavior.floating,
+                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                        ),
+                                                      );
+                                                    }
+                                                  },
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    padding: const EdgeInsets.symmetric(vertical: 5),
+                                                    decoration: BoxDecoration(
+                                                      gradient: AppTheme.accentGradient,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 11),
+                                                        SizedBox(width: 3),
+                                                        Text(
+                                                          "Sepete Ekle",
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 9,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
         ),
         
@@ -706,7 +944,7 @@ class PremiumHomeScreenState extends State<PremiumHomeScreen>
           crossAxisCount: 2,
           crossAxisSpacing: 20,
           mainAxisSpacing: 20,
-          childAspectRatio: 0.55,
+          childAspectRatio: 0.46,
         ),
       ),
     );

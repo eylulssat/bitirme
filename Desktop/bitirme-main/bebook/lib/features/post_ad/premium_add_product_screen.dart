@@ -8,7 +8,9 @@ import 'package:bebook/services/api_service.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
+import '../profile/ultra_premium_auth_screen.dart';
 
 /// 💎 Premium Kitap Sat Ekranı - Modern & User-Friendly
 class PremiumAddProductScreen extends StatefulWidget {
@@ -37,6 +39,7 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
 
   bool _isLoading = false;
   bool _isScanning = false;
+  bool _isLoggedIn = false;
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -66,6 +69,19 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
     ));
 
     _controller.forward();
+    _checkLogin();
+  }
+
+  Future<void> _checkLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loggedIn = prefs.getBool('is_logged_in') ?? false;
+    final email = prefs.getString('user_email') ?? widget.userEmail ?? '';
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = loggedIn;
+        if (email.isNotEmpty) _mailController.text = email;
+      });
+    }
   }
 
   @override
@@ -121,10 +137,9 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
   Future<void> fetchBookData(Uint8List imageBytes, String fileName) async {
     setState(() => _isScanning = true);
     try {
-      final client = http.Client();
       var request = http.MultipartRequest(
         "POST",
-        Uri.parse("http://192.168.1.6:8001/scan"),
+        Uri.parse("${ApiService.baseUrl}/scan"),
       );
 
       request.files.add(
@@ -175,6 +190,13 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
       return;
     }
 
+    // Mail alanı zorunlu ve geçerli format olmalı
+    final email = _mailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      _showSnackBar("Geçerli bir e-posta adresi girin!", AppTheme.warningAmber);
+      return;
+    }
+
     double? priceValue = double.tryParse(_priceController.text);
     if (priceValue == null) {
       _showSnackBar("Geçerli bir fiyat giriniz!", AppTheme.warningAmber);
@@ -219,6 +241,127 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
     );
   }
 
+  Widget _buildLoginPrompt() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: AppTheme.shadowXL,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppTheme.primaryGradient,
+                  boxShadow: AppTheme.shadowPrimary,
+                ),
+                child: const Icon(Icons.sell_rounded, size: 56, color: Colors.white),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                "Kitap Sat",
+                style: AppTheme.textTheme.headlineLarge?.copyWith(
+                  color: AppTheme.primaryIndigo,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "İlan vermek için önce giriş yapman gerekiyor.",
+                style: AppTheme.textTheme.bodyLarge?.copyWith(
+                  color: AppTheme.neutralDark,
+                  height: 1.6,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 36),
+              // Giriş Yap butonu
+              Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: AppTheme.shadowPrimary,
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    HapticFeedback.mediumImpact();
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const UltraPremiumAuthScreen(isLogin: true),
+                      ),
+                    );
+                    if (result != null) await _checkLogin();
+                  },
+                  icon: const Icon(Icons.login_rounded, color: Colors.white, size: 22),
+                  label: Text(
+                    "Giriş Yap",
+                    style: AppTheme.textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Üye Ol butonu
+              Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.accentOrange, width: 2),
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const UltraPremiumAuthScreen(isLogin: false),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.person_add_rounded,
+                      color: AppTheme.accentOrange, size: 22),
+                  label: Text(
+                    "Üye Ol",
+                    style: AppTheme.textTheme.titleLarge?.copyWith(
+                      color: AppTheme.accentOrange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -229,7 +372,12 @@ class _PremiumAddProductScreenState extends State<PremiumAddProductScreen>
           // Animated Background
           _buildAnimatedBackground(),
 
-          // Content
+          // Giriş yapılmamışsa login prompt göster
+          if (!_isLoggedIn)
+            SafeArea(child: _buildLoginPrompt()),
+
+          // Giriş yapılmışsa form göster
+          if (_isLoggedIn)
           SafeArea(
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),

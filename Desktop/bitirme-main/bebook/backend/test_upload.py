@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Test ayarları
-BASE_URL = "http://10.108.206.156:8000"  # Güncel IP adresi
+BASE_URL = "http://192.168.1.103:8002"  # Güncel IP adresi
 TEST_IMAGE_PATH = "test_book_cover.jpg"  # Test için bir görsel oluşturun
 
 def create_test_image():
