@@ -1,0 +1,473 @@
+/* ===== Temel ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --sidebar-width: 260px;
+  --sidebar-min: 200px;
+  --sidebar-max: 400px;
+
+  --bg-app: #f5f5f4;
+  --bg-sidebar: #fafaf9;
+  --bg-editor: #ffffff;
+  --bg-hover: #f0efed;
+  --bg-active: #ebeae8;
+
+  --text-primary: #1c1917;
+  --text-secondary: #78716c;
+  --text-muted: #a8a29e;
+
+  --border: #e7e5e4;
+  --border-light: #f0efed;
+
+  --accent: #292524;
+  --accent-soft: #44403c;
+
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --radius: 8px;
+  --radius-sm: 6px;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --editor-max-width: 720px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font);
+  color: var(--text-primary);
+  background: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Layout ===== */
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ===== Sol Panel ===== */
+.sidebar {
+  position: relative;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-min);
+  max-width: var(--sidebar-max);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 20px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.app-title-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.app-title h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.tree-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 16px;
+}
+
+.tree-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.tree-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* ===== Ağaç ===== */
+.tree {
+  list-style: none;
+}
+
+.tree ul {
+  list-style: none;
+  padding-left: 12px;
+  margin-left: 10px;
+  border-left: 1px solid var(--border-light);
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin: 1px 0;
+  transition: background 0.12s ease;
+}
+
+.tree-item:hover {
+  background: var(--bg-hover);
+}
+
+.tree-item.active {
+  background: var(--bg-active);
+}
+
+.tree-item.active .tree-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.tree-label {
+  flex: 1;
+  padding: 7px 6px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  transition: color 0.12s;
+}
+
+.tree-item:hover .tree-label,
+.tree-item.active .tree-label {
+  color: var(--text-primary);
+}
+
+.tree-label-input {
+  flex: 1;
+  background: var(--bg-editor);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-family: var(--font);
+  outline: none;
+  min-width: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.tree-label-input:focus {
+  border-color: var(--text-muted);
+}
+
+.tree-actions {
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.tree-item:hover .tree-actions,
+.tree-item.active .tree-actions {
+  opacity: 1;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, background 0.12s;
+}
+
+.btn-icon:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.btn-icon.danger:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+/* ===== Resize ===== */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 10;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: var(--border);
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* ===== Butonlar ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  background: var(--bg-editor);
+  color: var(--text-secondary);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: #d6d3d1;
+}
+
+.btn:active {
+  background: var(--bg-active);
+}
+
+.btn-primary {
+  width: 100%;
+  background: var(--accent);
+  color: #fafaf9;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: #fafaf9;
+}
+
+/* ===== Sağ Panel ===== */
+.editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-editor);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 24px;
+  background: var(--bg-editor);
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 6px;
+}
+
+.toolbar select {
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.toolbar select:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.toolbar select:focus {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.btn-tool {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.btn-tool:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-tool.wide {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12.5px;
+  gap: 4px;
+}
+
+/* ===== Editör ===== */
+.editor-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-editor);
+}
+
+.editor-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.editor-wrapper::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.editor {
+  min-height: 100%;
+  max-width: var(--editor-max-width);
+  margin: 0 auto;
+  padding: 48px 32px 120px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+  font-style: normal;
+}
+
+.editor p {
+  margin-bottom: 0.6em;
+}
+
+.editor hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 28px 0;
+}
+
+/* ===== Tablo ===== */
+.editor table {
+  border-collapse: collapse;
+  margin: 20px 0;
+  width: 100%;
+  font-size: 14px;
+}
+
+.editor table td,
+.editor table th {
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  min-width: 72px;
+  vertical-align: top;
+}
+
+.editor table th {
+  background: var(--bg-sidebar);
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.editor table td {
+  background: var(--bg-editor);
+}
+
+.editor img {
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ===== Boş durum ===== */
+.editor-panel.no-page .toolbar {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.editor-panel.no-page .editor:empty::before {
+  content: 'Sol panelden bir başlık seçin veya yeni bir tane oluşturun';
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ===== Boş ağaç ===== */
+.tree-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}

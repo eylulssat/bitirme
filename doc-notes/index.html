@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notlarım</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="app-title">
+          <span class="app-title-icon">📝</span>
+          <h1>Notlarım</h1>
+        </div>
+        <span class="sidebar-section-label">Sayfalar</span>
+        <button class="btn btn-primary" id="add-root-btn" title="Yeni ana başlık ekle">
+          + Yeni Sayfa
+        </button>
+      </div>
+      <nav class="tree-container">
+        <ul class="tree" id="tree-root"></ul>
+      </nav>
+      <div class="resize-handle" id="resize-handle" title="Paneli yeniden boyutlandır"></div>
+    </aside>
+
+    <!-- Sağ Panel: Editör -->
+    <main class="editor-panel">
+      <div class="toolbar" id="toolbar">
+        <div class="toolbar-group">
+          <select id="font-family" title="Yazı tipi">
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" selected>Sistem</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+          </select>
+          <select id="font-size" title="Punto">
+            <option value="12px">12</option>
+            <option value="14px">14</option>
+            <option value="15px" selected>15</option>
+            <option value="18px">18</option>
+            <option value="24px">24</option>
+            <option value="32px">32</option>
+          </select>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+          <button class="btn-tool" data-cmd="bold" title="Kalın"><b>B</b></button>
+          <button class="btn-tool" data-cmd="italic" title="İtalik"><i>I</i></button>
+          <button class="btn-tool" data-cmd="underline" title="Altı çizili"><u>U</u></button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+          <button class="btn-tool" data-cmd="insertHorizontalRule" title="Ayırıcı çizgi">—</button>
+          <button class="btn-tool wide" id="insert-table-btn" title="Tablo ekle">Tablo</button>
+        </div>
+      </div>
+
+      <div class="editor-wrapper">
+        <div
+          class="editor"
+          id="editor"
+          contenteditable="true"
+          spellcheck="true"
+          data-placeholder="Yazmaya başlayın..."
+        ></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/state.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
